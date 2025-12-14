@@ -1,0 +1,16 @@
+# Windows default
+thumbs.db
+desktop.ini
+
+# MATLAB specific
+*.asv
+*.m~
+*.mex*
+*.mat
+slprj/
+*.slxc
+*.old
+*.autosave
+
+# Octave (if you use it)
+octave-workspace
