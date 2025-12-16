@@ -37,13 +37,8 @@ classdef SolutionData
                   %                     3 : Z-direction;
         FLOAD;    % double, FLOAD(NLOAD), Magnitude of load
 
-        % Beam data
-        Iy;     % double array, Moment of inertia about local y-axis
-        Iz;     % double array, Moment of inertia about local z-axis
-        J_T;    % double array, Torsional constant 抗扭常数
-        Nu;     % double array, Poisson ratio (for calculating G)
-        K_Node; % int array, Reference node K for orientation (NUME x 1)
-
+        
+        
         % Element data
         NUME;     % int, number of elements
         NNODE;    % int, number of nodes in an element
