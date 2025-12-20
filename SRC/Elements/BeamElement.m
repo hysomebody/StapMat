@@ -1,0 +1,286 @@
+% BEAMELEMENT 3D Beam Element Class
+%
+% Purpose:
+%   Represent a 2-node 3D beam element with 6 DOFs per node.
+%   Compute stiffness matrix considering bending, torsion, and axial deformation.
+% 功能：实现 3D 欧拉-伯努利梁（Euler-Bernoulli Beam）单元。
+%   每个节点包含 6 个自由度 (X, Y, Z 平动 + RX, RY, RZ 转动)。
+%   支持双向弯曲、扭转和轴向变形耦合。
+%
+% 核心逻辑：
+%   1. 根据截面属性 (Area, Iy, Iz, J, E, G) 计算局部刚度矩阵 k_loc。
+%   2. 利用参考向量 (Reference Vector) 构建坐标转换矩阵 T。
+%   3. 转换得到全局刚度矩阵 K = T' * k_loc * T。
+%   4. 根据全局位移反算单元内力 (CalcStress)。
+%
+% Call procedures:
+%   ./Element.m - Element() (Base Constructor)
+%   ./Element.m - SetNodes()
+%   ./Node.m
+%   ./BeamMaterial.m
+%
+% Called by:
+%   ./Domain.m
+%
+% Programmed by: 宋博
+classdef BeamElement < Element
+    properties
+        ReferenceVector % Reference Vector (参考向量，用于定义局部 y-z 平面)
+    end
+    
+    methods
+        % =================================================================
+        % Constructor (构造函数)
+        % =================================================================
+        function obj = BeamElement()
+            obj@Element(); 
+            obj.ReferenceVector = zeros(3, 1); % 初始化为零向量
+        end
+        
+        % =================================================================
+        % Read (读取单元数据)
+        % 格式: ElementID Node1 Node2 MatID RefX RefY RefZ
+        % =================================================================
+        function Read(obj, fid, expectedID, materialList, globalNodeList)
+            % 读取一行数据
+            lineStr = fgetl(fid);
+            data = str2num(lineStr); %#ok<ST2NM>
+            
+            % 1. Check ID (校验单元编号)
+            inputID = round(data(1));
+            if inputID ~= expectedID
+                error('Element ID mismatch. Expected: %d, Read: %d', expectedID, inputID);
+            end
+            obj.ID = inputID;
+            
+            % 2. Set Nodes (设置节点连接关系)
+            n1 = round(data(2));
+            n2 = round(data(3));
+            obj.SetNodes(globalNodeList, [n1, n2]);
+            
+            % 3. Set Material (设置材料属性)
+            matID = round(data(4));
+            obj.Material = materialList(matID); 
+            
+            % 4. Set Reference Vector (设置参考向量)
+            % 对应 C++ 代码中的 DD1, DD2, DD3
+            if length(data) < 7
+                error('Beam element %d data insufficient. Need Ref Vector (X,Y,Z).', inputID);
+            end
+            obj.ReferenceVector(1) = data(5);
+            obj.ReferenceVector(2) = data(6);
+            obj.ReferenceVector(3) = data(7);
+        end
+        
+        % =================================================================
+        % CalcStiffness (计算全局单元刚度矩阵)
+        % Output: k (12x12 matrix)
+        % =================================================================
+        function k = CalcStiffness(obj)
+            % 1. Get Local Stiffness & Rotation Matrix (获取局部矩阵和旋转矩阵)
+            [k_loc, T, ~] = obj.GetLocalMatrices();
+            
+            % 2. Transform to Global (坐标转换: K = T' * k_loc * T)
+            k = T' * k_loc * T;
+        end
+        
+        % =================================================================
+        % CalcStress (计算单元内力和应力)
+        % Input: globalU (全场全局位移向量)
+        % Output: results (结构体，包含 ForceVector 和 Stress)
+        % =================================================================
+        function results = CalcStress(obj, globalU)
+            % 1. Get Matrices (获取矩阵)
+            [k_loc, T, ~] = obj.GetLocalMatrices();
+            
+            % 2. Extract Element Global DOFs (提取单元相关的 12 个全局位移)
+            u_g = zeros(12, 1);
+            
+            % Node 1 DOFs (1-6)
+            for i = 1:6
+                id = obj.Nodes(1).BCode(i);
+                if id > 0, u_g(i) = globalU(id); end
+            end
+            % Node 2 DOFs (7-12)
+            for i = 1:6
+                id = obj.Nodes(2).BCode(i);
+                if id > 0, u_g(i+6) = globalU(id); end
+            end
+            
+            % 3. Transform to Local Displacement (转换到局部坐标系: u_loc = T * u_g)
+            u_loc = T * u_g;
+            
+            % 4. Compute Local Forces (计算局部内力: f = k * u)
+            % f_loc = [Fx1, Fy1, Fz1, Mx1, My1, Mz1, Fx2, Fy2, Fz2, Mx2, My2, Mz2]'
+            f_loc = k_loc * u_loc;
+            
+            % 5. Extract Result Forces (提取节点2端的内力作为单元内力)
+            % 符号约定：
+            % Axial Force (轴力): 拉为正
+            % Moments (弯矩): 右手定则
+            N  = f_loc(7);  % Axial Force (Fx2)
+            Qy = f_loc(8);  % Shear Force Y (Fy2)
+            Qz = f_loc(9);  % Shear Force Z (Fz2)
+            Mx = f_loc(10); % Torsional Moment (Mx2)
+            My = f_loc(11); % Bending Moment Y (My2)
+            Mz = f_loc(12); % Bending Moment Z (Mz2)
+            
+            % 6. Compute Nominal Stress (计算名义正应力)
+            % 注意：此处仅计算平均轴向应力，弯曲应力需要截面模量 W，暂时省略组合计算
+            sigma_axial = N / obj.Material.Area;
+            
+            % 7. Pack Results (打包结果)
+            results.ForceVector = [N, Qy, Qz, Mx, My, Mz];
+            results.Force = N;        % 兼容接口：主要力
+            results.Stress = sigma_axial; % 兼容接口：主要应力
+        end
+        
+        % =================================================================
+        % GetLocationMatrix (获取定位向量/方程号)
+        % Output: lm (12x1 vector)
+        % =================================================================
+        function lm = GetLocationMatrix(obj)
+            lm = zeros(12, 1);
+            lm(1:6)  = obj.Nodes(1).BCode; % Node 1: DOFs 1-6
+            lm(7:12) = obj.Nodes(2).BCode; % Node 2: DOFs 7-12
+        end
+
+        % =================================================================
+        % CalcMass (计算质量矩阵 - 简化集中质量)
+        % Output: m (12x12 matrix)
+        % =================================================================
+        function m = CalcMass(obj)
+            % 暂时使用集中质量矩阵 (Lumped Mass Matrix)
+            % 假设材料密度 rho = 7850 (可扩展为从 Material 读取)
+            rho = 7850; 
+            
+            n1 = obj.Nodes(1); n2 = obj.Nodes(2);
+            L = norm(n2.XYZ - n1.XYZ);
+            A = obj.Material.Area;
+            
+            totalMass = rho * A * L;
+            massPerNode = totalMass / 2.0;
+            
+            % 仅考虑平动自由度的质量 (u, v, w)
+            diagMass = zeros(12, 1);
+            diagMass([1 2 3 7 8 9]) = massPerNode;
+            
+            % 添加微小转动惯量以防止动力学计算奇异
+            rotMass = massPerNode * (L^2) / 1000; 
+            diagMass([4 5 6 10 11 12]) = rotMass;
+            
+            m = diag(diagMass);
+        end
+
+    end
+    
+    % =====================================================================
+    % Private Helper Methods (私有辅助方法)
+    % =====================================================================
+    methods (Access = private)
+        
+        function [k_loc, T, L] = GetLocalMatrices(obj)
+            % 1. Geometric Properties (几何属性)
+            node1 = obj.Nodes(1);
+            node2 = obj.Nodes(2);
+            d = node2.XYZ - node1.XYZ;
+            L = norm(d);
+            
+            if L <= 1e-12
+                error('Element %d has zero length!', obj.ID);
+            end
+            
+            % 2. Material Properties (材料属性)
+            mat = obj.Material; 
+            E = mat.E;   % Young's Modulus (杨氏模量)
+            G = mat.G;   % Shear Modulus (剪切模量)
+            A = mat.Area;% Area (截面积)
+            Iy = mat.Iy; % Moment of Inertia Y (惯性矩 Iy)
+            Iz = mat.Iz; % Moment of Inertia Z (惯性矩 Iz)
+            J = mat.J;   % Torsional Constant (扭转常数)
+            
+            % 3. Stiffness Coefficients (刚度系数)
+            X  = E * A / L;             % Axial stiffness
+            Y1 = 12 * E * Iz / L^3;     % Bending Z terms
+            Y2 = 6 * E * Iz / L^2;
+            Y3 = 4 * E * Iz / L;
+            Y4 = 2 * E * Iz / L;
+            Z1 = 12 * E * Iy / L^3;     % Bending Y terms
+            Z2 = 6 * E * Iy / L^2;
+            Z3 = 4 * E * Iy / L;
+            Z4 = 2 * E * Iy / L;
+            S  = G * J / L;             % Torsion stiffness
+            
+            % 4. Fill Local Stiffness Matrix (填充局部刚度矩阵 12x12)
+            k_loc = zeros(12, 12);
+            
+            % --- Diagonal Blocks (对角块) ---
+            k_loc(1,1) = X;   k_loc(7,7) = X;    % Axial (u)
+            k_loc(2,2) = Y1;  k_loc(8,8) = Y1;   % Shear Y (v) - related to Iz
+            k_loc(3,3) = Z1;  k_loc(9,9) = Z1;   % Shear Z (w) - related to Iy
+            k_loc(4,4) = S;   k_loc(10,10)= S;   % Torsion (th_x)
+            k_loc(5,5) = Z3;  k_loc(11,11)= Z3;  % Bending Y (th_y)
+            k_loc(6,6) = Y3;  k_loc(12,12)= Y3;  % Bending Z (th_z)
+            
+            % --- Coupling Terms (耦合项) ---
+            % Node 1 Internal
+            k_loc(2,6) = Y2;  k_loc(6,2) = Y2;   % v1 - th_z1
+            k_loc(3,5) = -Z2; k_loc(5,3) = -Z2;  % w1 - th_y1
+            
+            % Node 2 Internal
+            k_loc(8,12) = -Y2; k_loc(12,8) = -Y2; % v2 - th_z2
+            k_loc(9,11) = Z2;  k_loc(11,9) = Z2;  % w2 - th_y2
+            
+            % Node 1 - Node 2 Interaction
+            k_loc(1,7) = -X;   k_loc(7,1) = -X;   % Axial coupling
+            k_loc(4,10)= -S;   k_loc(10,4)= -S;   % Torsion coupling
+            
+            k_loc(2,8) = -Y1;  k_loc(8,2) = -Y1;  % v1 - v2
+            k_loc(3,9) = -Z1;  k_loc(9,3) = -Z1;  % w1 - w2
+            
+            k_loc(2,12)= Y2;   k_loc(12,2)= Y2;   % v1 - th_z2
+            k_loc(6,8) = -Y2;  k_loc(8,6) = -Y2;  % th_z1 - v2
+            k_loc(6,12)= Y4;   k_loc(12,6)= Y4;   % th_z1 - th_z2
+            
+            k_loc(3,11)= -Z2;  k_loc(11,3)= -Z2;  % w1 - th_y2
+            k_loc(5,9) = Z2;   k_loc(9,5) = Z2;   % th_y1 - w2
+            k_loc(5,11)= Z4;   k_loc(11,5)= Z4;   % th_y1 - th_y2
+            
+            % 5. Coordinate Transformation Matrix T (坐标转换矩阵)
+            % Local x axis (u-axis)
+            vec_x = d / L;
+            
+            % Reference vector (参考向量)
+            vec_ref = obj.ReferenceVector;
+            
+            % Local z axis (w-axis) = x cross ref
+            vec_z = cross(vec_x, vec_ref);
+            
+            % Handle Singularity: if ref is parallel to beam, use global Y
+            if norm(vec_z) < 1e-10
+                % Warning suppressed for standard workflow, but logic is handled
+                if abs(vec_x(1)) < 0.9 && abs(vec_x(2)) > 0.9 % Beam is Y-axis
+                    vec_z = cross(vec_x, [0; 0; 1]); % Use global Z
+                else
+                    vec_z = cross(vec_x, [0; 1; 0]); % Use global Y
+                end
+            end
+            vec_z = vec_z / norm(vec_z);
+            
+            % Local y axis (v-axis) = z cross x
+            vec_y = cross(vec_z, vec_x);
+            vec_y = vec_y / norm(vec_y);
+            
+            % Build 3x3 Rotation Block
+            T_sub = [vec_x'; vec_y'; vec_z'];
+            
+            % Assemble 12x12 Transformation Matrix T
+            % T = blkdiag(T_sub, T_sub, T_sub, T_sub) equivalent
+            T = zeros(12, 12);
+            T(1:3, 1:3)     = T_sub;
+            T(4:6, 4:6)     = T_sub;
+            T(7:9, 7:9)     = T_sub;
+            T(10:12, 10:12) = T_sub;
+        end
+    end
+end

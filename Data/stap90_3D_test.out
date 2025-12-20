@@ -1,0 +1,133 @@
+
+ C O N T R O L   I N F O R M A T I O N
+
+      NUMBER OF NODAL POINTS . . . . . . . . . . (NUMNP)  =          3
+      NUMBER OF ELEMENT GROUPS . . . . . . . . . (NUMEG)  =          2
+      NUMBER OF LOAD CASES . . . . . . . . . . . (NLCASE) =          1
+      SOLUTION MODE  . . . . . . . . . . . . . . (MODEX)  =          1
+         EQ.0, DATA CHECK
+         EQ.1, EXECUTION
+
+ N O D A L   P O I N T   D A T A
+
+       NODE          BOUNDARY                         NODAL POINT
+      NUMBER     CONDITION  CODES                     COORDINATES
+                    X    Y    Z               X            Y            Z
+         1          1    1    1              0.000        0.000        0.000
+         2          0    0    0              0.000        0.000        4.000
+         3          1    1    1              3.000        0.000        0.000
+
+
+ EQUATION NUMBERS
+
+        NODE         DEGREES OF FREEDOM
+       NUMBER
+          N                  X         Y         Z
+          1                  0         0         0
+          2                  1         2         3
+          3                  0         0         0
+
+
+ L O A D   C A S E   D A T A
+
+     LOAD CASE NUMBER . . . . . . . =          1
+     NUMBER OF CONCENTRATED LOADS . =          2
+
+        NODE       DIRECTION      LOAD
+       NUMBER                   MAGNITUDE
+         2            1        1.00000e+04
+         2            2        1.00000e+03
+
+
+ E L E M E N T   G R O U P   D A T A
+
+
+ E L E M E N T   D E F I N I T I O N
+
+ ELEMENT TYPE  . . . . . . . . . . . . .( NPAR(1) ) . . =          3
+     EQ.1, TRUSS ELEMENTS
+     EQ.2, PLANE STRESS ELEMENTS
+     EQ.3, BEAM ELEMENTS
+ NUMBER OF ELEMENTS. . . . . . . . . . .( NPAR(2) ) . . =          1
+
+ M A T E R I A L   D E F I N I T I O N
+
+ NUMBER OF DIFFERENT SETS OF MATERIAL
+ AND CROSS-SECTIONAL  CONSTANTS  . . . .( NPAR(3) ) . . =          1
+  SET       YOUNG'S       SHEAR        CROSS-SECT      INERTIA-Y      INERTIA-Z
+ NUMBER     MODULUS       MODULUS         AREA            Iy             Iz
+    1     1.000e+07    1.000e+07    1.000e+00    1.000e-01    1.000e-01
+
+
+ E L E M E N T   I N F O R M A T I O N
+
+      ELEMENT          NODE          NODE       MATERIAL
+      NUMBER-N           I             J       SET NUMBER
+         1               1             2           1
+
+
+ E L E M E N T   D E F I N I T I O N
+
+ ELEMENT TYPE  . . . . . . . . . . . . .( NPAR(1) ) . . =          1
+     EQ.1, TRUSS ELEMENTS
+     EQ.2, PLANE STRESS ELEMENTS
+     EQ.3, BEAM ELEMENTS
+ NUMBER OF ELEMENTS. . . . . . . . . . .( NPAR(2) ) . . =          1
+
+ M A T E R I A L   D E F I N I T I O N
+
+ NUMBER OF DIFFERENT SETS OF MATERIAL
+ AND CROSS-SECTIONAL  CONSTANTS  . . . .( NPAR(3) ) . . =          1
+  SET       YOUNG'S     CROSS-SECTIONAL
+ NUMBER     MODULUS          AREA
+               E              A
+    1     1.00000e+07    1.000000e-01
+
+
+ E L E M E N T   I N F O R M A T I O N
+
+      ELEMENT          NODE          NODE       MATERIAL
+      NUMBER-N           I             J       SET NUMBER
+         1               3             2           1
+
+
+  TOTAL SYSTEM DATA
+
+     NUMBER OF EQUATIONS . . . . . . . . . . . . . .(NEQ) =          6
+     NUMBER OF MATRIX ELEMENTS . . . . . . . . . . .(NWK) =         12
+     MAXIMUM HALF BANDWIDTH  . . . . . . . . . . . .(MK ) =          4
+     MEAN HALF BANDWIDTH . . . . . . . . . . . . . .(MM ) =          2
+
+
+ LOAD CASE   1
+
+ D I S P L A C E M E N T S
+
+       NODE           X-DISPLACEMENT    Y-DISPLACEMENT    Z-DISPLACEMENT
+          1              0.000000e+00      0.000000e+00      0.000000e+00
+          2              8.667904e-02      2.133333e-02      3.166357e-03
+          3              0.000000e+00      0.000000e+00      0.000000e+00
+
+
+  S T R E S S  C A L C U L A T I O N S  F O R  E L E M E N T  G R O U P    1
+
+       ELEMENT             AXIAL            SHEAR-Y        SHEAR-Z        TORSION        MOMENT-Y       MOMENT-Z
+       NUMBER              FORCE
+          1          7.9159e+03     4.0631e+03     1.0000e+03     0.0000e+00    -9.0949e-13     0.0000e+00
+
+
+  S T R E S S  C A L C U L A T I O N S  F O R  E L E M E N T  G R O U P    2
+
+       ELEMENT             FORCE            STRESS
+       NUMBER
+          1           -9.894867e+03    -9.894867e+04
+
+
+ S O L U T I O N   T I M E   L O G   I N   S E C
+
+     TIME FOR INPUT PHASE  . . . . . . . . . . . . . . =         0.01
+     TIME FOR CALCULATION OF STIFFNESS MATRIX  . . . . =         0.01
+     TIME FOR FACTORIZATION AND LOAD CASE SOLUTIONS  . =         0.00
+     TIME FOR STRESS CALCULATIONS  . . . . . . . . . . =         0.00
+
+      T O T A L   S O L U T I O N   T I M E  . . . . . =         0.03
