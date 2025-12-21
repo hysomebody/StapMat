@@ -10,7 +10,7 @@
 %
 % Called by:
 %   ./Domain.m - Used to create node instances during input.
-% Programmed by: 宋博
+% Programmed by: 宋博,程云志
 
 classdef Node < handle
     properties (Constant)
@@ -23,6 +23,7 @@ classdef Node < handle
         BCode   % (6x1 int) Boundary Condition Codes 
                 % 0 = Active (Free), 1 = Fixed
         Displacement  % 存储节点的 6 自由度位移向量
+        Temperature   % (double) Nodal Temperature
     end
     
     methods
@@ -32,6 +33,7 @@ classdef Node < handle
             obj.XYZ = zeros(3, 1);
             obj.BCode = zeros(obj.NDF, 1);
             obj.Displacement = zeros(obj.NDF, 1);  % 初始化为 0
+            obj.Temperature = 0.0; % 初始化温度
         end
         
         % Read nodal data from file stream
@@ -77,12 +79,17 @@ classdef Node < handle
                 
                 obj.XYZ(1:3) = data(5:7);
                 
-            elseif colCount == 10
-                % --- 格式 B: 6 BCs (Beam单元) ---
-                % ID, BC1, BC2, BC3, BC4, BC5, BC6, X, Y, Z
+            elseif colCount == 10 || colCount == 11
+                % --- 格式 B: 6 BCs (Beam/Shell) ---
+                % Base: ID, BC1..BC6, X, Y, Z (10 cols)
+                % Ext : ID, BC1..BC6, X, Y, Z, Temp (11 cols)
                 
                 obj.BCode(1:6) = round(data(2:7));
                 obj.XYZ(1:3) = data(8:10);
+                
+                if colCount == 11
+                    obj.Temperature = data(11);
+                end
                 
             else
                 error('Unknown Node Data Format. Expected 7 or 10 columns, got %d', colCount);
@@ -91,8 +98,8 @@ classdef Node < handle
         
         % Debug output
         function PrintInfo(obj)
-            fprintf('Node %d: [%.2f, %.2f, %.2f] BC:[%d %d %d %d %d %d]\n', ...
-                obj.ID, obj.XYZ(1), obj.XYZ(2), obj.XYZ(3), obj.BCode');
+            fprintf('Node %d: [%.2f, %.2f, %.2f] T=%.2f BC:[%d %d %d %d %d %d]\n', ...
+                obj.ID, obj.XYZ(1), obj.XYZ(2), obj.XYZ(3), obj.Temperature, obj.BCode');
         end
     end
 end

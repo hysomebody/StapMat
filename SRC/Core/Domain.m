@@ -238,9 +238,25 @@ classdef Domain < handle
                     end
                     obj.ElemGroups{grp} = eles;
 
-                else
-                    error('Unknown Element Type: %d', eType);
+                elseif eType == 3 % Tetra Element (New Implementation)
+                    % 1. Read Materials (TetraMaterial)
+                    mats = TetraMaterial.empty(0, nMat);
+                    for m = 1:nMat
+                        mats(m) = TetraMaterial();
+                        mats(m).Read(fid, m);
+                    end
+                    obj.MaterialSets{grp} = mats;
+                    
+                    % 2. Read Elements (TetraElement)
+                    eles = TetraElement.empty(0, nEle);
+                    for e = 1:nEle
+                        eles(e) = TetraElement();
+                        eles(e).Read(fid, e, mats, obj.NodeList);
+                    end
+                    obj.ElemGroups{grp} = eles;
 
+                else
+                    error('Unknown Element Type: %d. (Supported: 1=Truss, 2=Beam, 3=Tetra)', eType);
                 end
             end
         end
