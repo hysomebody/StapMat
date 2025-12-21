@@ -273,8 +273,9 @@ function stapmat(inputFileName)
     fprintf(fidOut, '     TIME FOR FACTORIZATION AND LOAD CASE SOLUTIONS  . = %12.2f\n', t_solve);
     fprintf(fidOut, '     TIME FOR STRESS CALCULATIONS  . . . . . . . . . . = %12.2f\n\n', t_stress);
     fprintf(fidOut, '      T O T A L   S O L U T I O N   T I M E  . . . . . = %12.2f\n', total_time);
+
+    WriteTecplot(femDomain)
     
     % 在控制台打印计算完成的消息
     fprintf('计算完成！结果已写入: %s\n', outputFileName);
-
 end
