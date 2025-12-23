@@ -3,7 +3,6 @@
 % Purpose:
 %   Store basic material properties (like ID, Young's Modulus E).
 %   Serve as a parent for TrussMaterial and BeamMaterial.
-% 功能：材料基类。为了支持多种单元，将 Read 定义为抽象方法，或者作为通用接口。
 %
 % Call procedures:
 %   None
@@ -17,13 +16,15 @@ classdef Material < handle
     properties
         ID  % Material Set Number (nset)
         E   % Young's Modulus
+        Density % Mass Density, required for Dynamics
     end
     
     methods
-        % Constructor
+        % 初始化
         function obj = Material()
             obj.ID = 0;
             obj.E = 0;
+            obj.Density = 0;
         end
         
         % Read material data (Virtual/Base implementation)

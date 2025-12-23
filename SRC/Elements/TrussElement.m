@@ -160,22 +160,18 @@ classdef TrussElement < Element
 
         % 实现质量矩阵计算
         function m = CalcMass(obj)
-            % 1. Get Geometry & Material
-            node1 = obj.Nodes(1); node2 = obj.Nodes(2);
+            % 1. 获取单元长度、密度、截面积等材料信息
+            node1 = obj.Nodes(1); 
+            node2 = obj.Nodes(2);
             L = norm(node2.XYZ - node1.XYZ);
             
-            rho = 7850; % 暂时写死或从 Material 读取 (Material类需要加 Density 属性)
+            rho = obj.Material.Density; 
             A = obj.Material.Area;
             
-            % 2. Consistent Mass Coefficient
-            coeff = rho * A * L / 6.0;
-            
-            % 3. Local Mass (Only axial for Truss?)
-            % 实际上桁架通常只考虑平动惯性。这里简化为沿轴向的一致质量。
-            % 为了动力学通用性，通常建议做简单的“集中质量”分配给平动自由度。
-            
-            % 这里写一个简单的集中质量 (Lumped Mass) 示例，更不容易出错
+            % 2. 总质量
             totalMass = rho * A * L;
+            
+            % 3. 集中质量(仅分配给平动自由度DOF1,2,3&7,8,9)
             m_lumped = totalMass / 2.0;
             
             m = zeros(12, 12);
@@ -183,8 +179,6 @@ classdef TrussElement < Element
             m(1,1) = m_lumped; m(2,2) = m_lumped; m(3,3) = m_lumped;
             % Node 2 (u,v,w)
             m(7,7) = m_lumped; m(8,8) = m_lumped; m(9,9) = m_lumped;
-            
-            % Rotation inertia is usually ignored for Truss
         end
         
     end

@@ -16,25 +16,14 @@
 %   stapmat.m (Main Script) - To initialize and read data
 
 classdef Domain < handle
-    % DOMAIN Root class for the Finite Element Problem
-    %
-    % Purpose:
-    %   Manage global data (NodeList, Elements, Materials, LoadCases).
-    %   Orchestrate the analysis process (Read -> Number -> Assemble -> Solve).
-    %
-    % Call procedures:
-    %   Node.Read, Node.PrintInfo
-    %   TrussElement.Read, TrussElement.CalcStiffness
-    %   TrussMaterial.Read
-    %
-    % Called by:
-    %   Main script (stapmat.m)
-    
+
     properties
         % Control Data
         Title       % Problem Title
         MODEX       % 0: Data Check, 1: Execution
-        NLCASE      % Number of Load Cases
+        NLCASE      % Number of Load Cases 载荷数量
+        AnalysisType % 0: Static, 1: Dynamic
+        DynParams    % Struct: .dt, .nSteps, .rho_inf, .alpha, .beta
         
         % Infrastructure
         NodeList    % (Array of Node) All nodes
@@ -82,6 +71,10 @@ classdef Domain < handle
             end
             
             try
+                % 取新文件前，清除上一次分析的残留矩阵
+                obj.GlobalK = [];
+                obj.GlobalM = [];
+          
                 fprintf('Input phase ...\n');
                 
                 % 1. Read Heading
@@ -94,7 +87,39 @@ classdef Domain < handle
                 obj.NUMEG  = round(tmp(2));
                 obj.NLCASE = round(tmp(3));
                 obj.MODEX  = round(tmp(4));
+
+                if length(tmp) >= 5
+                    obj.AnalysisType = round(tmp(5));
+                else
+                    obj.AnalysisType = 0; % 默认为静力学
+                end
                 
+                % 如果是动力学，读取下一行参数
+                if obj.AnalysisType == 1
+                    lineStr = fgetl(fid);
+                    dtmp = str2num(lineStr); %#ok<ST2NM>
+                    if isempty(dtmp)
+                        error('Dynamic Analysis selected but parameters line is missing.');
+                    end
+                    
+                    obj.DynParams.dt      = dtmp(1);
+                    obj.DynParams.nSteps  = round(dtmp(2));
+                    obj.DynParams.rho_inf = dtmp(3);
+                    
+                    % 读取阻尼 (可选)
+                    if length(dtmp) >= 5
+                        obj.DynParams.alpha = dtmp(4);
+                        obj.DynParams.beta  = dtmp(5);
+                    else
+                        obj.DynParams.alpha = 0.0;
+                        obj.DynParams.beta  = 0.0;
+                    end
+                    
+                    fprintf('Dynamic Params Read: dt=%.2e, N=%d, rho=%.2f\n', ...
+                        obj.DynParams.dt, obj.DynParams.nSteps, obj.DynParams.rho_inf);
+                end
+
+
                 % 3. Read Nodal Points
                 obj.ReadNodalPoints(fid);
                 
@@ -326,7 +351,6 @@ classdef Domain < handle
         % 组装全局质量矩阵 (类似 AssembleStiffnessMatrix)
         function AssembleMassMatrix(obj)
             fprintf('Assembling Global Mass Matrix...\n');
-            
             % 预估非零元 (跟刚度矩阵一样)
             totalEle = 0;
             for g = 1:length(obj.ElemGroups)
@@ -412,30 +436,7 @@ classdef Domain < handle
                     fprintf('Warning: Load applied to constrained DOF (Node %d, DOF %d)\n', nodeID, dofDir);
                 end
             end
-        end
-        
-    %    % 求解位移并更新到节点
-    %    function Solve(obj)
-    %        fprintf('Solving System Equations...\n');
-    %        
-    %        if isempty(obj.GlobalK)
-    %            error('Stiffness Matrix not assembled!');
-    %        end
-    %        
-    %        % 循环处理所有工况
-    %        for lc = 1:obj.NLCASE
-    %            % 1. 组装力向量
-    %            F = obj.AssembleForce(lc);
-    %            
-    %            % 2. 求解线性方程组 K * U = F
-    %            U_val = obj.GlobalK \ F;
-    %            
-    %            fprintf('Load Case %d Solved.\n', lc);
-    %            
-    %            % 3. 将结果存回节点 (以便后续输出位移)
-    %            obj.UpdateNodalDisplacements(U_val);
-    %        end
-    %    end
+        end  
         
         % 将计算出的全局位移向量 U_val 分发回各个节点
         function UpdateNodalDisplacements(obj, U_val)

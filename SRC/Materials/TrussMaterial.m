@@ -22,7 +22,7 @@ classdef TrussMaterial < Material
         end
         
         % Read material data from file stream
-        % Format: ID(int) E(double) Area(double)
+        % Format: ID(int) E(double) Area(double) Density(double)
         function Read(obj, fid, expectedID)
             % called by: Domain.ReadTrussElementData (to be implemented)
             
@@ -43,6 +43,14 @@ classdef TrussMaterial < Material
             % 2. Read Properties
             obj.E = data(2);    % From Base Class
             obj.Area = data(3); % Specific to Truss
+
+            if length(data) >= 4
+                obj.Density = data(4);
+            else
+                obj.Density = 0.0;
+                fprintf('Warning: No density found for TrussMaterial %d. Assuming 0.\n', obj.ID);
+            end
+
         end
     end
 end

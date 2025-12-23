@@ -3,7 +3,7 @@
 % Purpose:
 %   Represent a 2-node 3D beam element with 6 DOFs per node.
 %   Compute stiffness matrix considering bending, torsion, and axial deformation.
-% 功能：实现 3D 欧拉-伯努利梁（Euler-Bernoulli Beam）单元。
+% 功能：3D 欧拉-伯努利梁（Euler-Bernoulli Beam）单元。
 %   每个节点包含 6 个自由度 (X, Y, Z 平动 + RX, RY, RZ 转动)。
 %   支持双向弯曲、扭转和轴向变形耦合。
 %
@@ -29,18 +29,14 @@ classdef BeamElement < Element
     end
     
     methods
-        % =================================================================
         % Constructor (构造函数)
-        % =================================================================
         function obj = BeamElement()
             obj@Element(); 
             obj.ReferenceVector = zeros(3, 1); % 初始化为零向量
         end
         
-        % =================================================================
-        % Read (读取单元数据)
+        % Read element data(读取单元数据)
         % 格式: ElementID Node1 Node2 MatID RefX RefY RefZ
-        % =================================================================
         function Read(obj, fid, expectedID, materialList, globalNodeList)
             % 读取一行数据
             lineStr = fgetl(fid);
@@ -63,7 +59,6 @@ classdef BeamElement < Element
             obj.Material = materialList(matID); 
             
             % 4. Set Reference Vector (设置参考向量)
-            % 对应 C++ 代码中的 DD1, DD2, DD3
             if length(data) < 7
                 error('Beam element %d data insufficient. Need Ref Vector (X,Y,Z).', inputID);
             end
@@ -72,10 +67,8 @@ classdef BeamElement < Element
             obj.ReferenceVector(3) = data(7);
         end
         
-        % =================================================================
         % CalcStiffness (计算全局单元刚度矩阵)
         % Output: k (12x12 matrix)
-        % =================================================================
         function k = CalcStiffness(obj)
             % 1. Get Local Stiffness & Rotation Matrix (获取局部矩阵和旋转矩阵)
             [k_loc, T, ~] = obj.GetLocalMatrices();
@@ -84,11 +77,71 @@ classdef BeamElement < Element
             k = T' * k_loc * T;
         end
         
-        % =================================================================
+        % GetLocationMatrix (获取定位向量/方程号)
+        % Output: lm (12x1 vector)
+        function lm = GetLocationMatrix(obj)
+            lm = zeros(12, 1);
+            lm(1:6)  = obj.Nodes(1).BCode; % Node 1: DOFs 1-6
+            lm(7:12) = obj.Nodes(2).BCode; % Node 2: DOFs 7-12
+        end
+
+        % CalcMass (计算一致质量矩阵)
+        % Output: m (12x12 matrix)
+        function m = CalcMass(obj)
+            [~, T, L] = obj.GetLocalMatrices(); 
+            % 读取材料信息
+            mat = obj.Material;
+            rho = mat.Density;
+            A   = mat.Area;
+            J   = mat.J;
+
+            totalMass = rho * A * L;
+
+            % Axial Terms (u)
+            m_axial = (totalMass / 6.0) * [2, 1; 1, 2];     
+
+            % Torsion Terms (theta_x) - Polar mass moment of inertia
+            % J*rho*L / 6 * [2, 1; 1, 2]
+            m_torsion = (rho * J * L / 6.0) * [2, 1; 1, 2];
+            
+            % Bending Coefficients (Bernoulli Beam)
+            c = totalMass / 420.0;
+            
+            % Block for v-theta_z (XY Plane)
+            m_bend = c * [156,     22*L,    54,     -13*L;
+                          22*L,    4*L^2,   13*L,   -3*L^2;
+                          54,      13*L,    156,    -22*L;
+                          -13*L,   -3*L^2,  -22*L,  4*L^2];
+            
+            % 3. Assemble Local Mass Matrix (12x12)
+            m_loc = zeros(12, 12);
+            
+            % Axial (1, 7)
+            m_loc([1,7], [1,7]) = m_axial;
+            
+            % Torsion (4, 10)
+            m_loc([4,10], [4,10]) = m_torsion;
+            
+            % Bending XY (v, th_z -> 2, 6, 8, 12)
+            idx_xy = [2, 6, 8, 12];
+            m_loc(idx_xy, idx_xy) = m_bend;
+            
+            % Bending XZ (w, th_y -> 3, 5, 9, 11)
+            % For XZ plane, rotation signs are flipped for off-diagonals involving theta_y
+            % standard consistent mass matrix for w-thy
+            m_bend_xz = c * [156,     -22*L,   54,     13*L;
+                             -22*L,   4*L^2,   -13*L,  -3*L^2;
+                             54,      13*L,    156,    22*L;
+                             13*L,    -3*L^2,  22*L,   4*L^2];
+            idx_xz = [3, 5, 9, 11];
+            m_loc(idx_xz, idx_xz) = m_bend_xz;
+            
+            % 4. Transform to Global
+            m = T' * m_loc * T;
+        end
+               
         % CalcStress (计算单元内力和应力)
-        % Input: globalU (全场全局位移向量)
         % Output: results (结构体，包含 ForceVector 和 Stress)
-        % =================================================================
         function results = CalcStress(obj, globalU)
             % 1. Get Matrices (获取矩阵)
             [k_loc, T, ~] = obj.GetLocalMatrices();
@@ -129,53 +182,16 @@ classdef BeamElement < Element
             % 注意：此处仅计算平均轴向应力，弯曲应力需要截面模量 W，暂时省略组合计算
             sigma_axial = N / obj.Material.Area;
             
-            % 7. Pack Results (打包结果)
+            % 7. 打包结果
             results.ForceVector = [N, Qy, Qz, Mx, My, Mz];
             results.Force = N;        % 兼容接口：主要力
             results.Stress = sigma_axial; % 兼容接口：主要应力
         end
         
-        % =================================================================
-        % GetLocationMatrix (获取定位向量/方程号)
-        % Output: lm (12x1 vector)
-        % =================================================================
-        function lm = GetLocationMatrix(obj)
-            lm = zeros(12, 1);
-            lm(1:6)  = obj.Nodes(1).BCode; % Node 1: DOFs 1-6
-            lm(7:12) = obj.Nodes(2).BCode; % Node 2: DOFs 7-12
-        end
-
-        % =================================================================
-        % CalcMass (计算质量矩阵 - 简化集中质量)
-        % Output: m (12x12 matrix)
-        % =================================================================
-        function m = CalcMass(obj)
-            % 暂时使用集中质量矩阵 (Lumped Mass Matrix)
-            % 假设材料密度 rho = 7850 (可扩展为从 Material 读取)
-            rho = 7850; 
-            
-            n1 = obj.Nodes(1); n2 = obj.Nodes(2);
-            L = norm(n2.XYZ - n1.XYZ);
-            A = obj.Material.Area;
-            
-            totalMass = rho * A * L;
-            massPerNode = totalMass / 2.0;
-            
-            % 仅考虑平动自由度的质量 (u, v, w)
-            diagMass = zeros(12, 1);
-            diagMass([1 2 3 7 8 9]) = massPerNode;
-            
-            % 添加微小转动惯量以防止动力学计算奇异
-            rotMass = massPerNode * (L^2) / 1000; 
-            diagMass([4 5 6 10 11 12]) = rotMass;
-            
-            m = diag(diagMass);
-        end
-
     end
     
     % =====================================================================
-    % Private Helper Methods (私有辅助方法)
+    % Private Helper Methods(得到局部单元刚度矩阵、转换矩阵、单元长度)
     % =====================================================================
     methods (Access = private)
         
