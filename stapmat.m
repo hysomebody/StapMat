@@ -17,6 +17,7 @@ function stapmat(inputFileName)
     % 准备输出文件
     [pathstr, name, ~] = fileparts(inputFileName);
     outputFileName = fullfile(pathstr, [name, '.out']);
+    pltFileName = fullfile(pathstr, [name, '.plt']);
     
     fidOut = fopen(outputFileName, 'w');
     if fidOut == -1, error('无法创建输出文件: %s', outputFileName); end
@@ -52,6 +53,9 @@ function stapmat(inputFileName)
             
             % 实例化广义-alpha 动力学求解器
             solver = GeneralizedAlphaSolver(p.dt, p.nSteps, p.rho_inf, p.alpha, p.beta);
+
+            % 将 Tecplot 文件名传给求解器
+            solver.OutputFileName = pltFileName;
             
             % 执行求解
             solver.Solve(femDomain);
@@ -63,6 +67,9 @@ function stapmat(inputFileName)
             % 实例化静态求解器
             solver = StaticSolver();
             solver.Solve(femDomain);
+            % 静力学计算完成后，立即输出 Tecplot 文件
+            fprintf(' Writing Static Result to Tecplot: %s ...\n', pltFileName);
+            WriteTecplotLine(femDomain, pltFileName, 0.0, true);% 参数: domain, 文件名, 时间0.0, 是否新文件(true)
         end
     end
     

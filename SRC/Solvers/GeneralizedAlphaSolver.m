@@ -4,11 +4,19 @@ classdef GeneralizedAlphaSolver < Solver
     % Reference: Dynamics.txt (genalpha3)
     
     properties
-        dt          % Time step
-        NSteps      % Number of time steps
-        rho_inf     % Spectral radius
-        RayleighA   % Rayleigh Damping alpha
-        RayleighB   % Rayleigh Damping beta
+        dt          % Time step(时间步长)
+        NSteps      % Number of time steps(步数)
+        rho_inf     % Spectral radius 
+        RayleighA   % Rayleigh Damping alpha (瑞利商 α)
+        RayleighB   % Rayleigh Damping beta (瑞利商 β)
+
+        % 存储 Tecplot 输出文件名
+        OutputFileName
+
+        % 结果存储
+        TimeHistory % 存储时间点
+        DispHistory % 存储特定节点的位移历史 (用于绘图对比)
+        StressHistory % 存储特定单元的应力历史
     end
     
     methods
@@ -37,20 +45,20 @@ classdef GeneralizedAlphaSolver < Solver
             C = obj.RayleighA * M + obj.RayleighB * K;
             fprintf('   Damping Matrix Constructed (Rayleigh: a=%.4f, b=%.4f)\n', obj.RayleighA, obj.RayleighB);
             
-            % 3. Algorithm Parameters [cite: 3-5]
+            % 3. Algorithm Parameters 
             rho = obj.rho_inf;
             alpha_m = (13 + 20*rho - 5*rho^2) / (12 * (rho + 1)^2);
             alpha_f = (1 + 3*rho) / (2 * (rho + 1)^2);
             gamma1  = 5/12 + alpha_m - alpha_f;
             gamma2  = gamma1; 
             
-            % 4. System Matrices (E, F) [cite: 5-6]
+            % 4. System Matrices (E, F) 
             I = speye(nd);
             Z = sparse(nd, nd);
             E_mat = [I, Z; Z, M];
             F_mat = [Z, -I; K, C];
             
-            % 5. Effective Stiffness [cite: 15]
+            % 5. Effective Stiffness 
             dt_val = obj.dt;
             Keff = (dt_val * alpha_m) * E_mat + (dt_val^2 * alpha_f * gamma1) * F_mat;
             
@@ -61,24 +69,26 @@ classdef GeneralizedAlphaSolver < Solver
                 [L_fac, U_fac, P_fac, Q_fac] = lu(Keff);
             end
             
-            % =============================================================
-            % [修改重点] 定义载荷函数句柄 fhandle，整合协作者的逻辑
-            % =============================================================
-            
-            % A. 获取空间分布 (从输入文件读取 Load Case 1)
+            % 1. 获取空间分布 (从输入文件读取 Load Case 1)
             F_static = domainObj.AssembleForce(1);
+
+            % 2. 定义时间函数 (针对算例: sin(omega * t))
+            omega = 1.0; 
+            time_func = @(t) sin(omega * t);
             
-            % B. 定义时间函数 (平滑加载 Ramp, 1.0秒达到峰值)
-            %    注意：为了防止 t=0 时导数爆炸，必须使用 Ramp 而非阶跃
-            time_func = @(t) min(t / 1.0, 1.0) .* (t >= 0); 
-            % 如果你想用正弦波验证 (算例2)，可以取消注释下面这行：
-            % time_func = @(t) sin(1.0 * t); 
-            
-            % C. 组合成 fhandle (这是协作者代码的核心接口)
+            % 3. 组合成 fhandle
+            % F_static 是从输入文件读取的空间分布 (向量)，time_func 是时间标量
             fhandle = @(t) F_static * time_func(t);
             
-            % D. 定义 g_of_time 
-            %    完全复刻 Dynamics.txt 的形式
+            % 初始化历史记录 (选取几个关键点监控，避免内存爆炸)
+            monitorNodeID = 51; % 对应 1D 链条的中间节点 (Ref Index 50 -> Node 51)
+            monitorElemID = 50; % 监控第 50 号单元的应力
+            
+            obj.TimeHistory = zeros(obj.NSteps, 1);
+            obj.DispHistory = zeros(obj.NSteps, 1); 
+            obj.StressHistory = zeros(obj.NSteps, 1);
+
+            % 4. 定义 g_of_time 
             function gt = g_of_time(tt)
                 ft = fhandle(tt);
                 gt = [zeros(nd, 1); ft];
@@ -86,18 +96,18 @@ classdef GeneralizedAlphaSolver < Solver
             
             % =============================================================
             
-            % 6. Initial Conditions
+            % 5.初始化位移
             u0 = zeros(nd, 1);
             v0 = zeros(nd, 1);
             
-            % Initial Acceleration a0 [cite: 9]
+            % Initial Acceleration a0 
             f0 = fhandle(0); % 调用 fhandle
             a0 = M \ (f0 - C*v0 - K*u0);
             
             x     = [u0; v0];
             x_dot = [v0; a0];
             
-            % Initialize x_ddot (Using Finite Difference) [cite: 10-12]
+            % Initialize x_ddot (Using Finite Difference) 
             epsFD = 1e-6;
             g0 = g_of_time(0);
             g_eps = g_of_time(epsFD);
@@ -117,7 +127,7 @@ classdef GeneralizedAlphaSolver < Solver
                 V_vec = x_dot;
                 A_vec = x_ddot;
                 
-                % Calculate RHS using g_of_time [cite: 17-18]
+                % Calculate RHS using g_of_time 
                 g_naf = g_of_time(t_naf);
                 
                 term1 = E_mat * V_vec;
@@ -134,7 +144,7 @@ classdef GeneralizedAlphaSolver < Solver
                     A1 = Keff \ ERHS;
                 end
                 
-                % Update State [cite: 20-21]
+                % Update State 
                 V1 = V_vec + dt_val*(1 - gamma1)*A_vec + dt_val*gamma1*A1;
                 U1 = U_vec + dt_val*V_vec + (dt_val^2/2)*(1 - gamma2)*A_vec + (dt_val^2/2)*gamma2*A1;
                 
@@ -142,10 +152,51 @@ classdef GeneralizedAlphaSolver < Solver
                 x_dot  = V1;
                 x_ddot = A1;
                 
-                if mod(n, 100) == 0
-                    fprintf('Step %d/%d done.\n', n, obj.NSteps);
+                % 输出到 Tecplot
+                % 只有当定义了文件名，且满足输出间隔时才写入
+                if ~isempty(obj.OutputFileName) && (mod(n, 100) == 0) % 每100步输出一帧，避免文件过大
+                     % 必须先更新 Domain 中的位移，WriteTecplotLine 才能读到正确数据
+                     domainObj.UpdateNodalDisplacements(x(1:nd));
+                     
+                     % 如果是第100步(第一次输出)，设为新文件(true)，否则为追加(false)
+                     isFirstWrite = (n == 100); 
+                     WriteTecplotLine(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
+                end
+
+                % --- 记录数据 ---
+                if n <= obj.NSteps
+                    obj.TimeHistory(n) = t_naf; % 或者 t_n，取决于想记录哪个时刻
+                    
+                    % 记录监控节点的位移 (假设 X 方向 DOF=1)
+                    % 获取 Node 51 的全局方程号
+                    mNode = domainObj.NodeList(monitorNodeID);
+                    eqNum = mNode.BCode(1);
+                    if eqNum > 0
+                        obj.DispHistory(n) = x(eqNum);
+                    end
+                    
+                    % --- 计算并记录应力 (Task 3) ---
+                    % 为了性能，不计算所有单元，只计算监控单元
+                    % 如果需要全场应力，建议只在特定步数计算
+                    elem = domainObj.ElemGroups{1}(monitorElemID); % 假设 Group 1 是 Truss
+                    
+                    % 提取当前时刻的位移向量 U_vec (即 x(1:nd)) 传给单元
+                    % 注意：TrussElement.CalcStress 需要全局 U
+                    stressRes = elem.CalcStress(x(1:nd));
+                    obj.StressHistory(n) = stressRes.Stress;
+                end
+
+                if mod(n, 1000) == 0
+                    fprintf('Step %d/%d done. Max Disp=%.2e\n', n, obj.NSteps, max(abs(x(1:nd))));
                 end
             end
+            
+            % 简单的绘图验证 
+            figure(1);
+            subplot(2,1,1); plot(obj.TimeHistory, obj.DispHistory); 
+            title('Node 51 Displacement (STAPMAT)'); grid on;
+            subplot(2,1,2); plot(obj.TimeHistory, obj.StressHistory);
+            title('Element 50 Stress (STAPMAT)'); grid on;
             
             % 8. Post-Processing
             u_final = x(1:nd); 

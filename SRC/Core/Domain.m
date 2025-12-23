@@ -328,6 +328,13 @@ classdef Domain < handle
                             if colEq == 0; continue; end
                             
                             count = count + 1;
+                            % 动态扩容防止溢出 (Safety check)
+                            if count > length(I_idx)
+                                I_idx(end*2) = 0;
+                                J_idx(end*2) = 0;
+                                K_val(end*2) = 0;
+                            end
+
                             I_idx(count) = rowEq;
                             J_idx(count) = colEq;
                             K_val(count) = ke(r, c);
@@ -337,9 +344,29 @@ classdef Domain < handle
             end
             
             % Trim unused pre-allocation
+            if count == 0
+                warning('Stiffness Matrix is empty!');
+                obj.GlobalK = sparse(obj.NEQ, obj.NEQ);
+                return;
+            end
             I_idx = I_idx(1:count);
             J_idx = J_idx(1:count);
             K_val = K_val(1:count);
+            
+            % --- 诊断与自动修正 ---
+            max_I = max(I_idx);
+            max_J = max(J_idx);
+            max_Idx = max(max_I, max_J);
+            
+            if max_Idx > obj.NEQ
+                fprintf('Error: Max Index (%d) > NEQ (%d). Resizing Global Matrix.\n', max_Idx, obj.NEQ);
+                % 强制修正维度，避免报错，允许程序继续运行以查看结果
+                obj.NEQ = max_Idx; 
+            elseif obj.NEQ > max_Idx
+                % 这通常是正常的（有些方程可能没有任何刚度贡献，尽管少见），但值得注意
+                % fprintf('Info: NEQ (%d) > Max Index in K (%d).\n', obj.NEQ, max_Idx);
+            end
+            % --------------------
             
             % Create Sparse Matrix
             obj.GlobalK = sparse(I_idx, J_idx, K_val, obj.NEQ, obj.NEQ);
