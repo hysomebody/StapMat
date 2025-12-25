@@ -140,9 +140,12 @@ classdef TrussElement < Element
             stress = E * strain;
             force = stress * obj.Material.Area;
             
-            % 5. 返回结果
-            results.Force = force;   % Axial Force
-            results.Stress = stress; % Axial Stress
+            % 5. 打包结果
+            results.Force = force;   
+            results.Stress = stress; 
+            % 新增兼容接口：扭矩和弯矩设为0
+            results.Torsion = 0.0;
+            results.Moment  = 0.0;
         end
         
         % Return the Location Matrix (Equation numbers)

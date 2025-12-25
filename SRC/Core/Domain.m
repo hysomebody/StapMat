@@ -3,7 +3,7 @@
 % Purpose:
 %   Manage global data (NodeList, Elements, Materials, LoadCases).
 %   Orchestrate the analysis process (Read -> Number -> Assemble -> Solve).
-% 功能：整个程序的“大管家”，读取材料、读取单元、计算方程号和组装刚度矩阵
+% 功能：整个程序的大管家，读取材料、读取单元、计算方程号和组装刚度矩阵
 % 
 % Call procedures:
 %   ./Node.m - Read()
@@ -118,7 +118,6 @@ classdef Domain < handle
                     fprintf('Dynamic Params Read: dt=%.2e, N=%d, rho=%.2f\n', ...
                         obj.DynParams.dt, obj.DynParams.nSteps, obj.DynParams.rho_inf);
                 end
-
 
                 % 3. Read Nodal Points
                 obj.ReadNodalPoints(fid);
@@ -483,9 +482,9 @@ classdef Domain < handle
             % 将计算结果存入节点对象 
                 node.Displacement = dispVec;   
                 
-            % 打印节点平动分量，验证结果
-            fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
-                node.ID, dispVec(1), dispVec(2), dispVec(3));
+           %  % 打印节点平动分量，验证结果
+           %  fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
+           %      node.ID, dispVec(1), dispVec(2), dispVec(3));
             end
         end
 

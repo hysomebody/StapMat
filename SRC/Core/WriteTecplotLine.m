@@ -18,7 +18,13 @@ function WriteTecplotLine(domain, filename, currentTime, isNewFile)
     
     % 收集所有节点的坐标和位移 [X, Y, Z, U, V, W, Rx, Ry, Rz]
     NodalData = zeros(9, NUMNP); 
-    
+
+    % 数组大小扩容
+    NUME = 0;
+    for g = 1:domain.NUMEG
+        NUME = NUME + length(domain.ElemGroups{g});
+    end
+
     % 为了计算应力，构建临时的全局位移向量
     U_temp = zeros(domain.NEQ, 1); 
     
@@ -34,16 +40,21 @@ function WriteTecplotLine(domain, filename, currentTime, isNewFile)
         end
     end
     
-    % 收集所有单元的应力 (Cell-Centered)
-    ElemStress = zeros(1, NUME);
+    % 收集单元数据：Stress, Moment, Torsion
+    ElemStress  = zeros(1, NUME);
+    ElemMoment  = zeros(1, NUME); 
+    ElemTorsion = zeros(1, NUME); 
     eCount = 0;
     for g = 1:domain.NUMEG
         group = domain.ElemGroups{g};
         for e = 1:length(group)
             elem = group(e);
             eCount = eCount + 1;
+
             res = elem.CalcStress(U_temp);
             ElemStress(eCount) = res.Stress; 
+            ElemMoment(eCount)  = res.Moment; 
+            ElemTorsion(eCount) = res.Torsion; 
         end
     end
     
@@ -52,7 +63,7 @@ function WriteTecplotLine(domain, filename, currentTime, isNewFile)
         fid = fopen(filename, 'w');
         % 写文件头
         fprintf(fid, 'TITLE = "FEM Line Output"\n');
-        fprintf(fid, 'VARIABLES = "X", "Y", "Z", "U", "V", "W", "RX", "RY", "RZ", "Stress"\n');
+        fprintf(fid, 'VARIABLES = "X", "Y", "Z", "U", "V", "W", "RX", "RY", "RZ", "Stress", "Moment", "Torsion"\n');
     else
         fid = fopen(filename, 'a');
     end
@@ -60,17 +71,12 @@ function WriteTecplotLine(domain, filename, currentTime, isNewFile)
     if fid == -1, error('无法打开文件: %s', filename); end
     
     % --- 3. 写 Zone 头 (关键修正) ---
-    % 使用现代标准格式，避免混用 ET/F 和 ZONETYPE/DATAPACKING
-    % NODES 和 ELEMENTS 替代 N 和 E
-    % VARLOCATION 指定第10个变量(Stress)位于单元中心
-    
+    % VARLOCATION 第10, 11, 12个变量是 Cell-Centered
     fprintf(fid, 'ZONE T="Time=%.4f", STRANDID=1, SOLUTIONTIME=%.6e, ', currentTime, currentTime);
     fprintf(fid, 'NODES=%d, ELEMENTS=%d, ZONETYPE=FELINESEG, DATAPACKING=BLOCK, ', NUMNP, NUME);
-    fprintf(fid, 'VARLOCATION=([10]=CELLCENTERED)\n');
+    fprintf(fid, 'VARLOCATION=([10,11,12]=CELLCENTERED)\n');
     
     % --- 4. 写数据块 (BLOCK) ---
-    % Tecplot 要求 BLOCK 格式下，先写完变量1的所有节点值，再写变量2...
-    
     % 4.1 写节点变量 (1-9)
     % 格式控制：每行写几个数并不严格限制，重要的是顺序
     for varIdx = 1:9
@@ -78,12 +84,12 @@ function WriteTecplotLine(domain, filename, currentTime, isNewFile)
         fprintf(fid, '\n');
     end
     
-    % 4.2 写单元变量 (10) - Stress
-    fprintf(fid, '%15.6e ', ElemStress); 
-    fprintf(fid, '\n');
+    % 4.2 写单元变量 (10-12)
+    fprintf(fid, '%15.6e ', ElemStress);  fprintf(fid, '\n'); % Stress
+    fprintf(fid, '%15.6e ', ElemMoment);  fprintf(fid, '\n'); % Moment
+    fprintf(fid, '%15.6e ', ElemTorsion); fprintf(fid, '\n'); % Torsion
     
-    % --- 5. 写连接关系 (Connectivity) ---
-    % 1-based Node IDs
+    % 5. 写连接关系
     for g = 1:domain.NUMEG
         group = domain.ElemGroups{g};
         for e = 1:length(group)

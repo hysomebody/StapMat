@@ -10,13 +10,11 @@ classdef GeneralizedAlphaSolver < Solver
         RayleighA   % Rayleigh Damping alpha (瑞利商 α)
         RayleighB   % Rayleigh Damping beta (瑞利商 β)
 
-        % 存储 Tecplot 输出文件名
-        OutputFileName
-
         % 结果存储
-        TimeHistory % 存储时间点
-        DispHistory % 存储特定节点的位移历史 (用于绘图对比)
-        StressHistory % 存储特定单元的应力历史
+        % TimeHistory % 存储时间点
+        % DispHistory % 存储特定节点的位移历史 (用于绘图对比)
+        % StressHistory % 存储特定单元的应力历史
+        OutputFileName % 存储 Tecplot 输出文件名
     end
     
     methods
@@ -73,20 +71,39 @@ classdef GeneralizedAlphaSolver < Solver
             F_static = domainObj.AssembleForce(1);
 
             % 2. 定义时间函数 (针对算例: sin(omega * t))
-            omega = 1.0; 
+            omega = 60; 
             time_func = @(t) sin(omega * t);
             
-            % 3. 组合成 fhandle
-            % F_static 是从输入文件读取的空间分布 (向量)，time_func 是时间标量
+            % 3. 组合成 fhandle 
             fhandle = @(t) F_static * time_func(t);
             
-            % 初始化历史记录 (选取几个关键点监控，避免内存爆炸)
-            monitorNodeID = 51; % 对应 1D 链条的中间节点 (Ref Index 50 -> Node 51)
-            monitorElemID = 50; % 监控第 50 号单元的应力
-            
-            obj.TimeHistory = zeros(obj.NSteps, 1);
-            obj.DispHistory = zeros(obj.NSteps, 1); 
-            obj.StressHistory = zeros(obj.NSteps, 1);
+          %  % 初始化历史记录
+          %  % A. 尝试监控第一个受载节点
+          %  lc = domainObj.LoadCases(1);
+          %  if ~isempty(lc.Nodes)
+          %      monitorNodeID = lc.Nodes(1);
+          %  else
+          %      % 无载荷时监控中间节点
+          %      monitorNodeID = round(domainObj.NUMNP / 2);
+          %  end
+          %  
+          %  % B. 边界检查
+          %  if monitorNodeID > domainObj.NUMNP
+          %       monitorNodeID = 1; 
+          %  end
+          %  % C. 监控单元 (取中间号)
+          %  totalElements = 0;
+          %  for g = 1:domainObj.NUMEG
+          %      totalElements = totalElements + length(domainObj.ElemGroups{g});
+          %  end
+          %  monitorElemID = round(totalElements / 2);
+          %  if monitorElemID > totalElements, monitorElemID = 1; end
+          %  
+          %  fprintf('   [Monitor] Tracking Node %d and Element %d\n', monitorNodeID, monitorElemID);
+          %  
+          %  obj.TimeHistory = zeros(obj.NSteps, 1);
+          %  obj.DispHistory = zeros(obj.NSteps, 1); 
+          %  obj.StressHistory = zeros(obj.NSteps, 1);
 
             % 4. 定义 g_of_time 
             function gt = g_of_time(tt)
@@ -163,40 +180,40 @@ classdef GeneralizedAlphaSolver < Solver
                      WriteTecplotLine(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
                 end
 
-                % --- 记录数据 ---
-                if n <= obj.NSteps
-                    obj.TimeHistory(n) = t_naf; % 或者 t_n，取决于想记录哪个时刻
-                    
-                    % 记录监控节点的位移 (假设 X 方向 DOF=1)
-                    % 获取 Node 51 的全局方程号
-                    mNode = domainObj.NodeList(monitorNodeID);
-                    eqNum = mNode.BCode(1);
-                    if eqNum > 0
-                        obj.DispHistory(n) = x(eqNum);
-                    end
-                    
-                    % --- 计算并记录应力 (Task 3) ---
-                    % 为了性能，不计算所有单元，只计算监控单元
-                    % 如果需要全场应力，建议只在特定步数计算
-                    elem = domainObj.ElemGroups{1}(monitorElemID); % 假设 Group 1 是 Truss
-                    
-                    % 提取当前时刻的位移向量 U_vec (即 x(1:nd)) 传给单元
-                    % 注意：TrussElement.CalcStress 需要全局 U
-                    stressRes = elem.CalcStress(x(1:nd));
-                    obj.StressHistory(n) = stressRes.Stress;
-                end
+               % % --- 记录数据 ---
+               % if n <= obj.NSteps
+               %     obj.TimeHistory(n) = t_naf; % 或者 t_n，取决于想记录哪个时刻
+               %     
+               %     % 记录监控节点的位移 (假设 X 方向 DOF=1)
+               %     % 获取 Node 51 的全局方程号
+               %     mNode = domainObj.NodeList(monitorNodeID);
+               %     eqNum = mNode.BCode(1);
+               %     if eqNum > 0
+               %         obj.DispHistory(n) = x(eqNum);
+               %     end
+               %     
+               %     % --- 计算并记录应力 (Task 3) ---
+               %     % 为了性能，不计算所有单元，只计算监控单元
+               %     % 如果需要全场应力，建议只在特定步数计算
+               %     elem = domainObj.ElemGroups{1}(monitorElemID); % 假设 Group 1 是 Truss
+               %     
+               %     % 提取当前时刻的位移向量 U_vec (即 x(1:nd)) 传给单元
+               %     % TrussElement.CalcStress 需要全局 U
+               %     stressRes = elem.CalcStress(x(1:nd));
+               %     obj.StressHistory(n) = stressRes.Stress;
+               % end
 
-                if mod(n, 1000) == 0
+                if mod(n, 100) == 0
                     fprintf('Step %d/%d done. Max Disp=%.2e\n', n, obj.NSteps, max(abs(x(1:nd))));
                 end
             end
             
-            % 简单的绘图验证 
-            figure(1);
-            subplot(2,1,1); plot(obj.TimeHistory, obj.DispHistory); 
-            title('Node 51 Displacement (STAPMAT)'); grid on;
-            subplot(2,1,2); plot(obj.TimeHistory, obj.StressHistory);
-            title('Element 50 Stress (STAPMAT)'); grid on;
+            % % 简单的绘图验证 
+            % figure(1);
+            % subplot(2,1,1); plot(obj.TimeHistory, obj.DispHistory); 
+            % title('Node 51 Displacement (STAPMAT)'); grid on;
+            % subplot(2,1,2); plot(obj.TimeHistory, obj.StressHistory);
+            % title('Element 50 Stress (STAPMAT)'); grid on;
             
             % 8. Post-Processing
             u_final = x(1:nd); 

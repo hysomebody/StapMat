@@ -42,34 +42,39 @@ function stapmat(inputFileName)
     % 3.1 组装刚度矩阵 (无论是静态还是动力学都需要)
     femDomain.AssembleStiffnessMatrix();
     
+    % 定义静力学和动力学结果的文件名
+    fileStatic  = fullfile('Data', [name, '_Static.plt']);
+    fileDynamic = fullfile('Data', [name, '_Dynamic.plt']);
+
     % 根据输入文件选择求解器
     if femDomain.MODEX == 1
+    % 无论是否选择动力学，都先算一遍静力学作为“基准参考” 
+        fprintf('\n [Step 1] Running Static Analysis for Reference...\n');
+        staticSolver = StaticSolver();
+        staticSolver.Solve(femDomain);
         
+        % 输出静力学 .plt 文件
+        fprintf('   Writing Static Reference to: %s\n', fileStatic);
+        % 参数: domain, 文件名, 时间0.0, 是否新文件(true)
+        WriteTecplotLine(femDomain, fileStatic, 0.0, true);
+
         if femDomain.AnalysisType == 1
             % --- 动力学分析 ---
-            fprintf(' [Mode] Dynamic Analysis Selected (Input File Configured).\n');
+            fprintf('\n [Step 2] Dynamic Analysis Selected. Starting...\n');
             
             p = femDomain.DynParams; % 从 Domain 获取读取的参数
             
             % 实例化广义-alpha 动力学求解器
             solver = GeneralizedAlphaSolver(p.dt, p.nSteps, p.rho_inf, p.alpha, p.beta);
 
-            % 将 Tecplot 文件名传给求解器
-            solver.OutputFileName = pltFileName;
+            % 将 _Dynamic.plt 文件名传给求解器
+            solver.OutputFileName = fileDynamic;
             
             % 执行求解
             solver.Solve(femDomain);
             
         else
-            % --- 静力学分析 ---
-            fprintf(' [Mode] Static Analysis Selected.\n');
-            
-            % 实例化静态求解器
-            solver = StaticSolver();
-            solver.Solve(femDomain);
-            % 静力学计算完成后，立即输出 Tecplot 文件
-            fprintf(' Writing Static Result to Tecplot: %s ...\n', pltFileName);
-            WriteTecplotLine(femDomain, pltFileName, 0.0, true);% 参数: domain, 文件名, 时间0.0, 是否新文件(true)
+            fprintf('\n [Step 2] No Dynamic Analysis requested. Finished.\n');
         end
     end
     
@@ -78,19 +83,19 @@ function stapmat(inputFileName)
     
     totalTime = toc;
 
-    % --- 4. 输出最终结果 ---
-    % 对于动力学，这里输出的是最后一帧的位移；对于静力学，是平衡位置
-    fprintf(fidOut, '\n D I S P L A C E M E N T S (Final State)\n\n');
-    fprintf(fidOut, '    NODE           X-DISPLACEMENT    Y-DISPLACEMENT    Z-DISPLACEMENT\n');
-    for i = 1:femDomain.NUMNP
-        node = femDomain.NodeList(i);
-        d = node.Displacement;
-        fprintf(fidOut, '%8d      %15.6e   %15.6e   %15.6e\n', ...
-            node.ID, d(1), d(2), d(3));
-    end
-
-    fprintf(fidOut, '\n S O L U T I O N   T I M E   L O G (SEC)\n\n');
-    fprintf(fidOut, '     TOTAL TIME . . . . . . . . . . . . . . . . . . = %10.2f\n', totalTime);
-    
-    fprintf('计算完成！结果已写入: %s\n', outputFileName);
+    % % --- 4. 输出最终结果 ---
+    % % 对于动力学，这里输出的是最后一帧的位移；对于静力学，是平衡位置
+    % fprintf(fidOut, '\n D I S P L A C E M E N T S (Final State)\n\n');
+    % fprintf(fidOut, '    NODE           X-DISPLACEMENT    Y-DISPLACEMENT    Z-DISPLACEMENT\n');
+    % for i = 1:femDomain.NUMNP
+        % node = femDomain.NodeList(i);
+        % d = node.Displacement;
+        % fprintf(fidOut, '%8d      %15.6e   %15.6e   %15.6e\n', ...
+            % node.ID, d(1), d(2), d(3));
+    % end
+    % 
+    % fprintf(fidOut, '\n S O L U T I O N   T I M E   L O G (SEC)\n\n');
+    % fprintf(fidOut, '     TOTAL TIME . . . . . . . . . . . . . . . . . . = %10.2f\n', totalTime);
+    % 
+    % fprintf('计算完成！结果已写入: %s\n', outputFileName);
 end
