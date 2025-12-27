@@ -105,7 +105,9 @@ classdef TetraElement < Element
             % 5. Compute Element Stiffness (12x12)
             % k = integral(B' * D * B) dV = B' * D * B * V
             k = B' * D * B * V;
+            
         end
+
         function f = CalcThermalLoad(obj)
             % 1. 获取节点坐标
             x=zeros(4,1); y=zeros(4,1); z=zeros(4,1);

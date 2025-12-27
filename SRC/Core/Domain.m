@@ -462,7 +462,6 @@ classdef Domain < handle
                     fprintf('Warning: Load applied to constrained DOF (Node %d, DOF %d)\n', nodeID, dofDir);
                 end
             end
-
             % --- 2. 施加 体积力/热载荷 (Thermal Loads) ---
             % 遍历所有单元组
             for g = 1:length(obj.ElemGroups)
@@ -493,6 +492,7 @@ classdef Domain < handle
                     end
                 end
             end
+            
         end  
         
         % 将计算出的全局位移向量 U_val 分发回各个节点
