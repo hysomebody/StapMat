@@ -31,7 +31,8 @@ classdef BeamMaterial < Material
         end
         
         % Read material data from file stream
-        % Format: ID(int) E(double) G(double) A(double) Iy(double) Iz(double) J(double)
+        % Format: ID(int) E(double) G(double) A(double) Iy(double)
+        % Iz(double) J(double) Density(double)
         function Read(obj, fid, expectedID)
             % Call procedures: None
             % Called by: ./Domain.m - ReadElements()
@@ -57,6 +58,13 @@ classdef BeamMaterial < Material
             obj.Iy = data(5);
             obj.Iz = data(6);
             obj.J  = data(7);
+            if length(data) >= 8
+                obj.Density = data(8);
+            else
+                obj.Density = 0.0;
+                fprintf('Warning: No density found for BeamMaterial %d. Assuming 0.\n', obj.ID);
+            end
+
         end
     end
 end
