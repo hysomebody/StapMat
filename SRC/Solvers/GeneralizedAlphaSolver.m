@@ -70,9 +70,14 @@ classdef GeneralizedAlphaSolver < Solver
             % 1. 获取空间分布 (从输入文件读取 Load Case 1)
             F_static = domainObj.AssembleForce(1);
 
-            % 2. 定义时间函数 (针对算例: sin(omega * t))
-            omega = 60; 
-            time_func = @(t) sin(omega * t);
+            % 2. 定义时间函数 
+
+            % % 正弦载荷
+            % omega = 60; 
+            % time_func = @(t) sin(omega * t);
+
+            % 阶跃载荷
+            time_func = @(t) 1.0;
             
             % 3. 组合成 fhandle 
             fhandle = @(t) F_static * time_func(t);
@@ -171,12 +176,12 @@ classdef GeneralizedAlphaSolver < Solver
                 
                 % 输出到 Tecplot
                 % 只有当定义了文件名，且满足输出间隔时才写入
-                if ~isempty(obj.OutputFileName) && (mod(n, 100) == 0) % 每100步输出一帧，避免文件过大
+                if ~isempty(obj.OutputFileName) && (mod(n, 10) == 0) % 每10步输出一帧，避免文件过大
                      % 必须先更新 Domain 中的位移，WriteTecplotLine 才能读到正确数据
                      domainObj.UpdateNodalDisplacements(x(1:nd));
                      
-                     % 如果是第100步(第一次输出)，设为新文件(true)，否则为追加(false)
-                     isFirstWrite = (n == 100); 
+                     % 如果是第10步(第一次输出)，设为新文件(true)，否则为追加(false)
+                     isFirstWrite = (n == 10); 
                      WriteTecplotLine(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
                 end
 
@@ -203,7 +208,7 @@ classdef GeneralizedAlphaSolver < Solver
                %     obj.StressHistory(n) = stressRes.Stress;
                % end
 
-                if mod(n, 100) == 0
+                if mod(n, 10) == 0
                     fprintf('Step %d/%d done. Max Disp=%.2e\n', n, obj.NSteps, max(abs(x(1:nd))));
                 end
             end

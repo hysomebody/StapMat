@@ -1,0 +1,26 @@
+ C O N T R O L   I N F O R M A T I O N
+
+      NUMBER OF NODAL POINTS . . . . . . . (NUMNP)  =         11
+      NUMBER OF ELEMENT GROUPS . . . . . . (NUMEG)  =          2
+      NUMBER OF LOAD CASES . . . . . . . . (NLCASE) =          1
+      SOLUTION MODE  . . . . . . . . . . . (MODEX)  =          1
+
+
+ D I S P L A C E M E N T S (Final State)
+
+    NODE           X-DISPLACEMENT    Y-DISPLACEMENT    Z-DISPLACEMENT
+       1         0.000000e+00     -3.977725e-06      0.000000e+00
+       2         0.000000e+00     -2.977395e-04      0.000000e+00
+       3         0.000000e+00     -5.539997e-04      0.000000e+00
+       4         0.000000e+00     -7.352570e-04      0.000000e+00
+       5         0.000000e+00     -8.040097e-04      0.000000e+00
+       6         0.000000e+00     -7.352570e-04      0.000000e+00
+       7         0.000000e+00     -5.539997e-04      0.000000e+00
+       8         0.000000e+00     -2.977395e-04      0.000000e+00
+       9         0.000000e+00     -3.977725e-06      0.000000e+00
+      10         0.000000e+00      0.000000e+00      0.000000e+00
+      11         0.000000e+00      0.000000e+00      0.000000e+00
+
+ S O L U T I O N   T I M E   L O G (SEC)
+
+     TOTAL TIME . . . . . . . . . . . . . . . . . . =       0.01
