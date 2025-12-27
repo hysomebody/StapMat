@@ -462,6 +462,37 @@ classdef Domain < handle
                     fprintf('Warning: Load applied to constrained DOF (Node %d, DOF %d)\n', nodeID, dofDir);
                 end
             end
+
+            % --- 2. 施加 体积力/热载荷 (Thermal Loads) ---
+            % 遍历所有单元组
+            for g = 1:length(obj.ElemGroups)
+                elements = obj.ElemGroups{g};
+                if isempty(elements), continue; end
+                
+                % 检查该组单元是否支持热载荷计算 (即是否有 CalcThermalLoad 方法)
+                % 这样可以兼容 Truss/Beam 单元（如果它们还没写这个方法的话）
+                firstElem = elements(1);
+                if ismethod(firstElem, 'CalcThermalLoad')
+                    
+                    for e = 1:length(elements)
+                        elem = elements(e);
+                        
+                        % A. 计算单元热载荷向量 (12x1)
+                        f_ele = elem.CalcThermalLoad();
+                        
+                        % B. 获取定位向量 (Location Matrix)
+                        lm = elem.GetLocationMatrix();
+                        
+                        % C. 组装到全局向量 F
+                        for i = 1:length(lm)
+                            eq = lm(i);
+                            if eq > 0
+                                F(eq) = F(eq) + f_ele(i);
+                            end
+                        end
+                    end
+                end
+            end
         end  
         
         % 将计算出的全局位移向量 U_val 分发回各个节点

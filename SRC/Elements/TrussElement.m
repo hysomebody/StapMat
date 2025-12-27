@@ -106,6 +106,54 @@ classdef TrussElement < Element
             % Node 2 - Node 2 (Bottom-Right)
             k(7:9, 7:9) = k_sub;
         end
+
+        % =================================================================
+        % CalcThermalLoad (计算桁架单元的热等效节点力)
+        % =================================================================
+        function f = CalcThermalLoad(obj)
+            % 1. 获取几何信息
+            node1 = obj.Nodes(1);
+            node2 = obj.Nodes(2);
+            
+            dx = node2.XYZ(1) - node1.XYZ(1);
+            dy = node2.XYZ(2) - node1.XYZ(2);
+            dz = node2.XYZ(3) - node1.XYZ(3);
+            L = sqrt(dx^2 + dy^2 + dz^2);
+            
+            % 方向余弦向量 n = [nx, ny, nz]
+            if L < 1e-12, L=1; end % 避免除以0
+            n = [dx/L; dy/L; dz/L];
+            
+            % 2. 获取温度信息
+            % 假设 Node 类有 Temperature 属性
+            T1 = 0; T2 = 0;
+            if isprop(node1, 'Temperature'), T1 = node1.Temperature; end
+            if isprop(node2, 'Temperature'), T2 = node2.Temperature; end
+            
+            T_avg = (T1 + T2) / 2.0;
+            
+            % 3. 计算热轴力大小 F_th = E * A * Alpha * dT
+            % 注意：如果 T_avg > 0 (升温)，杆件想伸长，
+            % 对节点的等效力应该是向外推节点，即拉力方向。
+            
+            E = obj.Material.E;
+            A = obj.Material.Area;
+            Alpha = 0.0;
+            if isprop(obj.Material, 'Alpha'), Alpha = obj.Material.Alpha; end
+            
+            F_mag = E * A * Alpha * T_avg;
+            
+            % 4. 组装到全局力向量 (12x1)
+            % Node 1 力: 指向 Node 1 外侧 (即 -n 方向) -> F = -F_mag * n
+            % Node 2 力: 指向 Node 2 外侧 (即 +n 方向) -> F = +F_mag * n
+            
+            f1 = -F_mag * n;
+            f2 =  F_mag * n;
+            
+            f = zeros(12, 1);
+            f(1:3) = f1; % Node 1 Translational Force
+            f(7:9) = f2; % Node 2 Translational Force
+        end
         
         % 计算桁架单元的应力和内力
         function results = CalcStress(obj, globalU)
@@ -133,14 +181,27 @@ classdef TrussElement < Element
             
             % local deformation = T * (u2 - u1)
             delta_L = T * (u2_g - u1_g);
+
+            strain_total = delta_L / L;
             
-            % 4. 计算应变和应力
-            strain = delta_L / L;
+            % 4. 热应变 (Thermal Strain)
+            Alpha = 0.0;
+            if isprop(obj.Material, 'Alpha'), Alpha = obj.Material.Alpha; end
+            
+            T1 = 0; T2 = 0;
+            if isprop(node1, 'Temperature'), T1 = node1.Temperature; end
+            if isprop(node2, 'Temperature'), T2 = node2.Temperature; end
+            T_avg = (T1 + T2) / 2.0;
+            
+            strain_thermal = Alpha * T_avg;
+            
+            % 5. 计算机械应力: Sigma = E * (Eps_total - Eps_thermal)
             E = obj.Material.E;
-            stress = E * strain;
+            stress = E * (strain_total - strain_thermal);
+            
             force = stress * obj.Material.Area;
             
-            % 5. 打包结果
+            % 6. 打包结果
             results.Force = force;   
             results.Stress = stress; 
             % 新增兼容接口：扭矩和弯矩设为0

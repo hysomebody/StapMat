@@ -105,11 +105,74 @@ classdef TetraElement < Element
             % 5. Compute Element Stiffness (12x12)
             % k = integral(B' * D * B) dV = B' * D * B * V
             k = B' * D * B * V;
+        end
+        function f = CalcThermalLoad(obj)
+            % 1. 获取节点坐标
+            x=zeros(4,1); y=zeros(4,1); z=zeros(4,1);
+            temps = zeros(4,1);
+            for i=1:4 
+                n=obj.Nodes(i); 
+                x(i)=n.XYZ(1); y(i)=n.XYZ(2); z(i)=n.XYZ(3);
+                % 假设 Node 类有 Temperature 属性
+                if isprop(n, 'Temperature')
+                    temps(i) = n.Temperature;
+                else
+                    temps(i) = 0;
+                end
+            end
+
+            % 2. 计算体积 V6 和 V
+            M_vol = [1, x(1), y(1), z(1); 
+                     1, x(2), y(2), z(2); 
+                     1, x(3), y(3), z(3); 
+                     1, x(4), y(4), z(4)];
+            V6 = det(M_vol);
+            V = abs(V6) / 6.0;
+
+            % 3. 计算 B 矩阵 (6x12)
+            B = zeros(6, 12);
+            for i = 1:4
+                j=mod(i,4)+1; m=mod(i+1,4)+1; p=mod(i+2,4)+1;
+                bi = -det([1, y(j), z(j); 1, y(m), z(m); 1, y(p), z(p)]);
+                ci =  det([1, x(j), z(j); 1, x(m), z(m); 1, x(p), z(p)]);
+                di = -det([1, x(j), y(j); 1, x(m), y(m); 1, x(p), y(p)]);
+                
+                col_start = (i-1)*3 + 1;
+                col_end   = (i-1)*3 + 3;
+                
+                B(:, col_start:col_end) = (-1)^(i+1) * ...
+                    [bi,  0,  0;
+                      0, ci,  0;
+                      0,  0, di;
+                      0, di, ci;
+                     di,  0, bi;
+                     ci, bi,  0];
+            end
+            B = B / V6;
+
+            % 4. 获取 D 矩阵
+            D = obj.GetDMatrix();
             
+            % 5. 计算热载荷
+            % 假设 Alpha 存在于 Material 中
+            alpha = 0;
+            if isprop(obj.Material, 'Alpha')
+                alpha = obj.Material.Alpha;
+            end
+            
+            % 计算平均温升 (假设初始温度为0，即 dT = T_current)
+            T_avg = sum(temps) / 4.0;
+            
+            % 热应变向量 [alpha*dT, alpha*dT, alpha*dT, 0, 0, 0]'
+            eps_th = alpha * T_avg * [1; 1; 1; 0; 0; 0];
+            
+            % 计算等效节点力: f = Integral(B' * D * eps_th) dV
+            % 对于常应变单元，积分为直接乘以体积 V
+            f = V * (B' * D * eps_th);
         end
 
         % =================================================================
-        % CalcStress (计算单元应力)
+        % CalcStress (计算单元应力 - 修正版含热应力)
         % =================================================================
         function results = CalcStress(obj, globalU)
             % 1. Extract Local Displacements (Translational Only)
@@ -126,11 +189,14 @@ classdef TetraElement < Element
             end
 
             % 2. Re-calculate B and V6 (Needed for strain)
-            % Note: In a highly optimized code, B might be stored, but recalculating is safer.
             x = zeros(4,1); y = zeros(4,1); z = zeros(4,1);
+            temps = zeros(4,1);
             for i = 1:4
-                n = obj.Nodes(i); x(i)=n.XYZ(1); y(i)=n.XYZ(2); z(i)=n.XYZ(3);
+                n = obj.Nodes(i); 
+                x(i)=n.XYZ(1); y(i)=n.XYZ(2); z(i)=n.XYZ(3);
+                if isprop(n, 'Temperature'), temps(i) = n.Temperature; end
             end
+            
             M_vol = [1, x(1), y(1), z(1); 1, x(2), y(2), z(2); 1, x(3), y(3), z(3); 1, x(4), y(4), z(4)];
             V6 = det(M_vol);
             
@@ -144,27 +210,42 @@ classdef TetraElement < Element
             end
             B = B / V6;
 
-            % 3. Calculate Stress Vector
+            % 3. Calculate Total Strain
+            % Strain = B * u
+            strain_total = B * u_elem;
+            
+            % 4. Calculate Thermal Strain
+            % 获取热膨胀系数
+            alpha = 0;
+            if isprop(obj.Material, 'Alpha')
+                alpha = obj.Material.Alpha;
+            end
+            
+            % 平均温度
+            T_avg = sum(temps) / 4.0;
+            
+            % 热应变向量 [alpha*dT, alpha*dT, alpha*dT, 0, 0, 0]'
+            eps_th = alpha * T_avg * [1; 1; 1; 0; 0; 0];
+
+            % 5. Calculate Mechanical Stress
             D = obj.GetDMatrix();
-            % Stress = D * Strain = D * B * u
-            stress_vec = D * B * u_elem; 
+            % Stress = D * (Strain_Total - Strain_Thermal)
+            % [关键修改]：这里必须减去 eps_th
+            stress_vec = D * (strain_total - eps_th); 
+            
             % stress_vec format: [sig_x, sig_y, sig_z, tau_yz, tau_zx, tau_xy]'
 
-            % 4. Calculate Von Mises Stress (Original Logic from Te4Stress)
-            % I1 = sig1 + sig2 + sig3
-            % I2 ... I3 ...
-            % Using invariant formula directly from components:
+            % 6. Calculate Von Mises Stress
             sx = stress_vec(1); sy = stress_vec(2); sz = stress_vec(3);
             t_yz = stress_vec(4); t_zx = stress_vec(5); t_xy = stress_vec(6);
 
             % Von Mises Formula:
-            % sqrt(0.5 * [(sx-sy)^2 + (sy-sz)^2 + (sz-sx)^2 + 6*(txy^2 + tyz^2 + tzx^2)])
             vm_sq = 0.5 * ((sx-sy)^2 + (sy-sz)^2 + (sz-sx)^2 + 6*(t_xy^2 + t_yz^2 + t_zx^2));
             von_mises = sqrt(vm_sq);
 
             results.StressVector = stress_vec;
             results.Stress = von_mises; % Scalar for plotting
-            results.Force = 0; % Force concept is vague for solid, maybe return 0
+            results.Force = 0; 
         end
 
         % =================================================================

@@ -135,6 +135,13 @@ classdef GeneralizedAlphaSolver < Solver
             
             % 7. Time Integration Loop
             fprintf('   Time Integration: %d steps, dt=%.2e\n', obj.NSteps, dt_val);
+
+            useVolumeOutput = false;
+            if domainObj.NUMEG > 0 && ~isempty(domainObj.ElemGroups{1})
+                if isa(domainObj.ElemGroups{1}(1), 'TetraElement')
+                    useVolumeOutput = true;
+                end
+            end
             
             for n = 1:obj.NSteps
                 t_n = (n-1)*dt_val;
@@ -177,7 +184,11 @@ classdef GeneralizedAlphaSolver < Solver
                      
                      % 如果是第100步(第一次输出)，设为新文件(true)，否则为追加(false)
                      isFirstWrite = (n == 100); 
-                     WriteTecplotLine(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
+                     if useVolumeOutput
+                        WriteTecplotVolume(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
+                     else
+                        WriteTecplotLine(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
+                     end
                 end
 
                % % --- 记录数据 ---

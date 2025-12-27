@@ -55,8 +55,18 @@ function stapmat(inputFileName)
         
         % 输出静力学 .plt 文件
         fprintf('   Writing Static Reference to: %s\n', fileStatic);
-        % 参数: domain, 文件名, 时间0.0, 是否新文件(true)
-        WriteTecplotLine(femDomain, fileStatic, 0.0, true);
+        isTetra = false;
+        if femDomain.NUMEG > 0 && ~isempty(femDomain.ElemGroups{1})
+             if isa(femDomain.ElemGroups{1}(1), 'TetraElement')
+                 isTetra = true;
+             end
+        end
+        
+        if isTetra
+            WriteTecplotVolume(femDomain, fileStatic, 0.0, true);
+        else
+            WriteTecplotLine(femDomain, fileStatic, 0.0, true);
+        end
 
         if femDomain.AnalysisType == 1
             % --- 动力学分析 ---
@@ -79,7 +89,7 @@ function stapmat(inputFileName)
     end
     
         % 执行求解 (多态调用)
-        solver.Solve(femDomain); 
+        %solver.Solve(femDomain); 
     
     totalTime = toc;
 
