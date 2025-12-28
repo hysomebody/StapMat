@@ -60,23 +60,25 @@ classdef GeneralizedAlphaSolver < Solver
                 [L_fac, U_fac, P_fac, Q_fac] = lu(Keff);
             end
             
-            % 
-            F_static = domainObj.AssembleForce(1);
+
+            % 1. 获取空间分布 (从输入文件读取 Load Case 1)
+            [~, F_mech, F_thermal] = domainObj.AssembleForce(1);
 
             %--------------------------------------------------------
             % 定义时间函数 （输入的载荷在这里修改）
             % % 正弦载荷
-            % omega = 60; 
-            % time_func = @(t) sin(omega * t);
+             omega = 60; 
+             time_func = @(t) sin(omega * t);
 
             % 阶跃载荷
-            time_func = @(t) 1.0;
+            %time_func = @(t) 1.0;
             
-            % 组合成总载荷句柄 f(t)
-            fhandle = @(t) F_static * time_func(t);
 
-           
-          % % A. 尝试监控第一个受载节点
+            % 3 组合成 fhandle 
+            fhandle = @(t) F_thermal + F_mech * time_func(t);
+            
+          %  % 初始化历史记录
+          %  % A. 尝试监控第一个受载节点
           %  lc = domainObj.LoadCases(1);
           %  if ~isempty(lc.Nodes)
           %      monitorNodeID = lc.Nodes(1);
@@ -128,7 +130,12 @@ classdef GeneralizedAlphaSolver < Solver
             
             % 时间积分循环
             fprintf('   Time Integration: %d steps, dt=%.2e\n', obj.NSteps, dt_val);
-            % 在命令行窗口显示进度
+            useVolumeOutput = false;
+            if domainObj.NUMEG > 0 && ~isempty(domainObj.ElemGroups{1})
+                if isa(domainObj.ElemGroups{1}(1), 'TetraElement')
+                    useVolumeOutput = true;
+                end
+            end
             
             for n = 1:obj.NSteps
                 t_n = (n-1)*dt_val;
@@ -171,7 +178,11 @@ classdef GeneralizedAlphaSolver < Solver
                      
                      % 如果是第10步(第一次输出)，设为新文件(true)，否则为追加(false)
                      isFirstWrite = (n == 10); 
-                     WriteTecplotLine(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
+                     if useVolumeOutput
+                        WriteTecplotVolume(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
+                     else
+                        WriteTecplotLine(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
+                    end
                 end
 
                 % %  输出某个节点的位移（或其他量），对比用

@@ -51,6 +51,11 @@ classdef BeamMaterial < Material
                 obj.Density = 0.0;
                 fprintf('Warning: No density found for BeamMaterial %d. Assuming 0.\n', obj.ID);
             end
+            if length(data) >= 9
+                obj.Alpha = data(9);
+            else
+                obj.Alpha = 0.0; 
+            end
 
         end
     end

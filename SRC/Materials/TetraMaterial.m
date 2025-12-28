@@ -6,6 +6,7 @@
 %
 % Called by:
 %   ./Domain.m - ReadElements()
+% 程云志
 
 classdef TetraMaterial < Material
     properties
@@ -26,7 +27,7 @@ classdef TetraMaterial < Material
         function Read(obj, fid, expectedID)
             
             lineStr = fgetl(fid);
-            data = str2num(lineStr); %#ok<ST2NM>
+            data = str2num(lineStr); 
             
             if isempty(data)
                 error('Error reading TetraMaterial data');

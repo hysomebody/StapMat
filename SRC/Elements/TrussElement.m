@@ -9,6 +9,7 @@
 %
 % Called by:
 %   ./Domain.m
+% 修改：程云志
 
 classdef TrussElement < Element    
     methods
@@ -80,6 +81,48 @@ classdef TrussElement < Element
             % Node 2 - Node 2 (右下)
             k(7:9, 7:9) = k_sub;
         end
+
+        % =================================================================
+        % CalcThermalLoad (计算桁架单元的热等效节点力)
+        % =================================================================
+        function f = CalcThermalLoad(obj)
+            
+            node1 = obj.Nodes(1);
+            node2 = obj.Nodes(2);
+            
+            dx = node2.XYZ(1) - node1.XYZ(1);
+            dy = node2.XYZ(2) - node1.XYZ(2);
+            dz = node2.XYZ(3) - node1.XYZ(3);
+            L = sqrt(dx^2 + dy^2 + dz^2);
+            
+            
+            if L < 1e-12, L=1; end 
+            n = [dx/L; dy/L; dz/L];
+            
+            
+            T1 = 0; T2 = 0;
+            if isprop(node1, 'Temperature'), T1 = node1.Temperature; end
+            if isprop(node2, 'Temperature'), T2 = node2.Temperature; end
+            
+            T_avg = (T1 + T2) / 2.0;
+            
+            
+            E = obj.Material.E;
+            A = obj.Material.Area;
+            Alpha = 0.0;
+            if isprop(obj.Material, 'Alpha'), Alpha = obj.Material.Alpha; end
+            
+            F_mag = E * A * Alpha * T_avg;
+            
+            
+            
+            f1 = -F_mag * n;
+            f2 =  F_mag * n;
+            
+            f = zeros(12, 1);
+            f(1:3) = f1; 
+            f(7:9) = f2; 
+        end
         
         % 计算桁架单元的应力和内力
         function results = CalcStress(obj, globalU)
@@ -102,14 +145,27 @@ classdef TrussElement < Element
             % 3. 计算局部坐标系下的轴向变形 
             T = [dx/L, dy/L, dz/L]; 
             delta_L = T * (u2_g - u1_g);
+
+            strain_total = delta_L / L;
             
-            % 4. 计算应变和应力
-            strain = delta_L / L;
+            % 4. 热应变 (Thermal Strain)
+            Alpha = 0.0;
+            if isprop(obj.Material, 'Alpha'), Alpha = obj.Material.Alpha; end
+            
+            T1 = 0; T2 = 0;
+            if isprop(node1, 'Temperature'), T1 = node1.Temperature; end
+            if isprop(node2, 'Temperature'), T2 = node2.Temperature; end
+            T_avg = (T1 + T2) / 2.0;
+            
+            strain_thermal = Alpha * T_avg;
+            
+            % 5. 计算机械应力: Sigma = E * (Eps_total - Eps_thermal)
             E = obj.Material.E;
-            stress = E * strain;
+            stress = E * (strain_total - strain_thermal);
+            
             force = stress * obj.Material.Area;
             
-            % 5. 打包结果
+            % 6. 打包结果
             results.Force = force;   
             results.Stress = stress; 
             % 新增兼容接口：扭矩和弯矩设为0

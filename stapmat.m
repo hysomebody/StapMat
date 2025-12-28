@@ -49,7 +49,20 @@ function stapmat(inputFileName)
         staticSolver = StaticSolver();
         staticSolver.Solve(femDomain);
         fprintf('   Writing Static Reference to: %s\n', fileStatic);
-        WriteTecplotLine(femDomain, fileStatic, 0.0, true);
+
+        isTetra = false;
+        if femDomain.NUMEG > 0 && ~isempty(femDomain.ElemGroups{1})
+             if isa(femDomain.ElemGroups{1}(1), 'TetraElement')
+                 isTetra = true;
+             end
+        end
+        
+        if isTetra
+            WriteTecplotVolume(femDomain, fileStatic, 0.0, true);
+        else
+            WriteTecplotLine(femDomain, fileStatic, 0.0, true);
+        end
+
 
         % 动力学求解
         if femDomain.AnalysisType == 1

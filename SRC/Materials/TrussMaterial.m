@@ -9,6 +9,7 @@
 classdef TrussMaterial < Material
     properties
         Area 
+        Alpha % Thermal Expansion Coefficient
     end
     
     methods
@@ -40,6 +41,11 @@ classdef TrussMaterial < Material
             else
                 obj.Density = 0.0;
                 fprintf('Warning: No density found for TrussMaterial %d. Assuming 0.\n', obj.ID);
+            end
+            if length(data) >= 5
+                obj.Alpha = data(5);
+            else
+                obj.Alpha = 0.0;
             end
 
         end
