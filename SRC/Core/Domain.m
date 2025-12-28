@@ -62,19 +62,38 @@ classdef Domain < handle
     end
     
     methods (Access = public)
-        
+
+        % 每次读取数据前强制清除所有旧数据
+        function Reset(obj)
+            obj.NodeList = [];
+            obj.LoadCases = [];
+            obj.GlobalK = [];
+            obj.GlobalM = [];
+            obj.NEQ = 0;
+            obj.NLCASE = 0;
+            obj.NUMNP = 0;
+            obj.NUMEG = 0;
+            obj.ElemGroups = [] ;
+            % 如果有时间步相关参数，建议也重置，例如：
+            % obj.DynParams = []; 
+        end
+        % ==========================================================
+
         % Main entry point to read input file
         function success = ReadData(obj, filename)
+
+            obj.Reset();
+
             fid = fopen(filename, 'r');
             if fid == -1
                 error('Cannot open file: %s', filename);
             end
             
             try
-                % 取新文件前，清除上一次分析的残留矩阵
-                obj.GlobalK = [];
-                obj.GlobalM = [];
-          
+                % % 取新文件前，清除上一次分析的残留矩阵
+                % obj.GlobalK = [];
+                % obj.GlobalM = [];
+               
                 fprintf('Input phase ...\n');
                 
                 % 1. Read Heading
@@ -184,8 +203,15 @@ classdef Domain < handle
             obj.LoadCases = struct('Nodes', [], 'DOFs', [], 'Mags', []);
             
             for i = 1:obj.NLCASE
-                lineStr = fgetl(fid);
-                tmp = str2num(lineStr); %#ok<ST2NM>
+                tmp = [];
+                while isempty(tmp)
+                    lineStr = fgetl(fid);
+                    if ~ischar(lineStr) % 遇到文件尾
+                        error('Unexpected End of File while reading Load Case %d header.', i);
+                    end
+                    tmp = str2num(lineStr); %#ok<ST2NM>
+                end
+
                 lcNum = tmp(1);
                 numLoads = tmp(2);
                 
@@ -196,8 +222,15 @@ classdef Domain < handle
                 mags = zeros(numLoads, 1);
                 
                 for j = 1:numLoads
-                    lLine = fgetl(fid);
-                    lData = str2num(lLine); %#ok<ST2NM>
+                    lData = [];
+                    while isempty(lData)
+                        lLine = fgetl(fid);
+                        if ~ischar(lLine)
+                            error('Unexpected End of File while reading Load data (Case %d, Load %d).', i, j);
+                        end
+                        lData = str2num(lLine); %#ok<ST2NM>
+                    end
+                    % ------------------------------------------------
                     nodes(j) = lData(1);
                     dofs(j) = lData(2);
                     mags(j) = lData(3);
@@ -213,12 +246,17 @@ classdef Domain < handle
         function ReadElements(obj, fid)
             fprintf('Reading %d Element Groups...\n', obj.NUMEG);
             
-            % Loop over each group
             for grp = 1:obj.NUMEG
-                % Read Group Control Line: Type NumEle NumMat
-                lineStr = fgetl(fid);
-                tmp = str2num(lineStr); %#ok<ST2NM>
-                if isempty(tmp); lineStr = fgetl(fid); tmp = str2num(lineStr); end % Skip empty lines if any
+                % 读取：循环跳过空行 ---
+                tmp = [];
+                while isempty(tmp)
+                    lineStr = fgetl(fid);
+                    if ~ischar(lineStr)
+                         error('Unexpected End of File reading Element Group %d.', grp);
+                    end
+                    tmp = str2num(lineStr); %#ok<ST2NM>
+                end
+                % -------------------------------------
                 
                 eType = tmp(1);
                 nEle  = tmp(2);
@@ -482,9 +520,9 @@ classdef Domain < handle
             % 将计算结果存入节点对象 
                 node.Displacement = dispVec;   
                 
-           %  % 打印节点平动分量，验证结果
-           %  fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
-           %      node.ID, dispVec(1), dispVec(2), dispVec(3));
+            % 打印节点平动分量，验证结果
+            fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
+                node.ID, dispVec(1), dispVec(2), dispVec(3));
             end
         end
 

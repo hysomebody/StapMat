@@ -72,7 +72,7 @@ classdef BeamElement < Element
         function k = CalcStiffness(obj)
             % 1. Get Local Stiffness & Rotation Matrix (获取局部矩阵和旋转矩阵)
             [k_loc, T, ~] = obj.GetLocalMatrices();
-            
+           
             % 2. Transform to Global (坐标转换: K = T' * k_loc * T)
             k = T' * k_loc * T;
         end
@@ -142,7 +142,7 @@ classdef BeamElement < Element
                
         % CalcStress (计算单元内力和应力，输出最大正应力)
         % Output: results (结构体，包含 ForceVector 和 Stress)
-        function results = CalcStress(obj, globalU)
+         function results = CalcStress(obj, globalU)
             % 1. Get Matrices (获取矩阵)
             [k_loc, T, ~] = obj.GetLocalMatrices();
             
@@ -221,6 +221,7 @@ classdef BeamElement < Element
         end
         
     end
+
     
     % =====================================================================
     % Private Helper Methods(得到局部单元刚度矩阵、转换矩阵、单元长度)
@@ -262,37 +263,62 @@ classdef BeamElement < Element
             % 4. Fill Local Stiffness Matrix (填充局部刚度矩阵 12x12)
             k_loc = zeros(12, 12);
             
-            % --- Diagonal Blocks (对角块) ---
-            k_loc(1,1) = X;   k_loc(7,7) = X;    % Axial (u)
-            k_loc(2,2) = Y1;  k_loc(8,8) = Y1;   % Shear Y (v) - related to Iz
-            k_loc(3,3) = Z1;  k_loc(9,9) = Z1;   % Shear Z (w) - related to Iy
-            k_loc(4,4) = S;   k_loc(10,10)= S;   % Torsion (th_x)
-            k_loc(5,5) = Z3;  k_loc(11,11)= Z3;  % Bending Y (th_y)
-            k_loc(6,6) = Y3;  k_loc(12,12)= Y3;  % Bending Z (th_z)
+           % ... (前面计算 X, Y1, Y2, Z1, Z2 等系数的部分保持不变)
+
+            % ---------------------------------------------------------
+            % 修正后的刚度矩阵赋值 (Standard Right-Hand Rule)
+            % ---------------------------------------------------------
             
-            % --- Coupling Terms (耦合项) ---
+            % [1] Axial (轴向)
+            k_loc(1,1) = X;   k_loc(1,7) = -X;
+            k_loc(7,1) = -X;  k_loc(7,7) = X;
+
+            % [2] Torsion (扭转)
+            k_loc(4,4) = S;   k_loc(4,10)= -S;
+            k_loc(10,4)= -S;  k_loc(10,10)= S;
+
+            % [3] Bending XY Plane (v - theta_z) -> 保持正号逻辑
             % Node 1 Internal
-            k_loc(2,6) = Y2;  k_loc(6,2) = Y2;   % v1 - th_z1
-            k_loc(3,5) = -Z2; k_loc(5,3) = -Z2;  % w1 - th_y1
+            k_loc(2,2) = Y1;
+            k_loc(6,6) = Y3;
+            k_loc(2,6) = Y2;  % Positive
+            k_loc(6,2) = Y2;
             
             % Node 2 Internal
-            k_loc(8,12) = -Y2; k_loc(12,8) = -Y2; % v2 - th_z2
-            k_loc(9,11) = Z2;  k_loc(11,9) = Z2;  % w2 - th_y2
+            k_loc(8,8) = Y1;
+            k_loc(12,12)= Y3;
+            k_loc(8,12) = -Y2; % Negative (Symmetric antisymmetry)
+            k_loc(12,8) = -Y2;
             
-            % Node 1 - Node 2 Interaction
-            k_loc(1,7) = -X;   k_loc(7,1) = -X;   % Axial coupling
-            k_loc(4,10)= -S;   k_loc(10,4)= -S;   % Torsion coupling
+            % Interaction
+            k_loc(2,8) = -Y1; k_loc(8,2) = -Y1;
+            k_loc(6,12)= Y4;  k_loc(12,6)= Y4;
+            k_loc(2,12)= Y2;  k_loc(12,2)= Y2;
+            k_loc(6,8) = -Y2; k_loc(8,6) = -Y2;
+
+            % [4] Bending XZ Plane (w - theta_y) -> 关键修正：符号必须与 XY 平面相反
+            % Node 1 Internal
+            k_loc(3,3) = Z1;
+            k_loc(5,5) = Z3;
+            k_loc(3,5) = -Z2;  
+            k_loc(5,3) = -Z2;  
             
-            k_loc(2,8) = -Y1;  k_loc(8,2) = -Y1;  % v1 - v2
-            k_loc(3,9) = -Z1;  k_loc(9,3) = -Z1;  % w1 - w2
+            % Node 2 Internal
+            k_loc(9,9) = Z1;
+            k_loc(11,11)= Z3;
+            k_loc(9,11) = Z2;  
+            k_loc(11,9) = Z2;  
             
-            k_loc(2,12)= Y2;   k_loc(12,2)= Y2;   % v1 - th_z2
-            k_loc(6,8) = -Y2;  k_loc(8,6) = -Y2;  % th_z1 - v2
-            k_loc(6,12)= Y4;   k_loc(12,6)= Y4;   % th_z1 - th_z2
+            % Interaction
+            k_loc(3,9) = -Z1; k_loc(9,3) = -Z1;
+            k_loc(5,11)= Z4;  k_loc(11,5)= Z4;
             
-            k_loc(3,11)= -Z2;  k_loc(11,3)= -Z2;  % w1 - th_y2
-            k_loc(5,9) = Z2;   k_loc(9,5) = Z2;   % th_y1 - w2
-            k_loc(5,11)= Z4;   k_loc(11,5)= Z4;   % th_y1 - th_y2
+            k_loc(3,11)= -Z2; 
+            k_loc(11,3)= -Z2; 
+            k_loc(5,9) = Z2;  
+            k_loc(9,5) = Z2;  
+            
+            % ---------------------------------------------------------
             
             % 5. Coordinate Transformation Matrix T (坐标转换矩阵)
             % Local x axis (u-axis)
@@ -329,6 +355,7 @@ classdef BeamElement < Element
             T(4:6, 4:6)     = T_sub;
             T(7:9, 7:9)     = T_sub;
             T(10:12, 10:12) = T_sub;
+
         end
     end
 end

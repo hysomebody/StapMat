@@ -5,14 +5,15 @@ function stapmat(inputFileName)
 % STAPMAT 主程序 (支持静态与动力学分析)
 %
 % 用法:
-%   stapmat('Data/stap90.in')
+%   命令行键入stapmat('Data/stap90.in')，或修改为其他输入文件
+% 动力学问题：
+%   载荷的时间函数可在SRC\Solvers\GeneralizedAlphaSolver.m中修改，默认是正弦输入
+%   也可改为阶跃输入等
 
-    if nargin < 1
-        inputFileName = 'Data/verification_100.in';
-    end
-
+ 
     % 设置路径 
     addpath(genpath('SRC')); 
+    addpath(genpath('Data')); 
     
     % 准备输出文件
     [pathstr, name, ~] = fileparts(inputFileName);
@@ -79,23 +80,23 @@ function stapmat(inputFileName)
     end
     
         % 执行求解 (多态调用)
-        solver.Solve(femDomain); 
+        % solver.Solve(femDomain); 
     
     totalTime = toc;
 
-    % % --- 4. 输出最终结果 ---
-    % % 对于动力学，这里输出的是最后一帧的位移；对于静力学，是平衡位置
-    % fprintf(fidOut, '\n D I S P L A C E M E N T S (Final State)\n\n');
-    % fprintf(fidOut, '    NODE           X-DISPLACEMENT    Y-DISPLACEMENT    Z-DISPLACEMENT\n');
-    % for i = 1:femDomain.NUMNP
-        % node = femDomain.NodeList(i);
-        % d = node.Displacement;
-        % fprintf(fidOut, '%8d      %15.6e   %15.6e   %15.6e\n', ...
-            % node.ID, d(1), d(2), d(3));
-    % end
-    % 
-    % fprintf(fidOut, '\n S O L U T I O N   T I M E   L O G (SEC)\n\n');
-    % fprintf(fidOut, '     TOTAL TIME . . . . . . . . . . . . . . . . . . = %10.2f\n', totalTime);
-    % 
-    % fprintf('计算完成！结果已写入: %s\n', outputFileName);
+    % --- 4. 输出最终结果 ---
+    % 对于动力学，这里输出的是最后一帧的位移；对于静力学，是平衡位置
+    fprintf(fidOut, '\n D I S P L A C E M E N T S (Final State)\n\n');
+    fprintf(fidOut, '    NODE           X-DISPLACEMENT    Y-DISPLACEMENT    Z-DISPLACEMENT\n');
+    for i = 1:femDomain.NUMNP
+        node = femDomain.NodeList(i);
+        d = node.Displacement;
+        fprintf(fidOut, '%8d      %15.6e   %15.6e   %15.6e\n', ...
+            node.ID, d(1), d(2), d(3));
+    end
+
+    fprintf(fidOut, '\n S O L U T I O N   T I M E   L O G (SEC)\n\n');
+    fprintf(fidOut, '     TOTAL TIME . . . . . . . . . . . . . . . . . . = %10.2f\n', totalTime);
+
+    fprintf('计算完成！结果已写入: %s\n', outputFileName);
 end

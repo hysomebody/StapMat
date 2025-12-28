@@ -1,5 +1,5 @@
 function WriteTecplotLine(domain, filename, currentTime, isNewFile)
-% WRITETECPLOTLINE 输出梁/杆单元结果到 Tecplot (修正版: 修复Zone头冲突)
+% WRITETECPLOTLINE 输出梁/杆单元结果到 Tecplot 
 %
 % 输入:
 %   domain      - Finite Element Domain 对象
