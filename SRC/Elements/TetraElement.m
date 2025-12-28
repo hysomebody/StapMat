@@ -259,22 +259,30 @@ classdef TetraElement < Element
         end
 
         % =================================================================
-        % CalcMass (计算质量矩阵 - 集中质量)
+        % CalcMass (计算质量矩阵)
         % =================================================================
         function m = CalcMass(obj)
-            % Volume
+            % 1. 获取坐标并计算体积
             x=zeros(4,1); y=zeros(4,1); z=zeros(4,1);
             for i=1:4, n=obj.Nodes(i); x(i)=n.XYZ(1); y(i)=n.XYZ(2); z(i)=n.XYZ(3); end
             V6 = det([1,x(1),y(1),z(1); 1,x(2),y(2),z(2); 1,x(3),y(3),z(3); 1,x(4),y(4),z(4)]);
             V = abs(V6)/6.0;
 
+            % 2. 获取密度
             rho = 7850; 
             if isprop(obj.Material, 'Rho'), rho = obj.Material.Rho; end
-            totalMass = rho * V;
-            m_node = totalMass / 4.0;
             
-            % 12x12 质量矩阵 (仅平动)
-            m = eye(12) * m_node;
+            % 3. 一致质量矩阵
+            factor = (rho * V) / 20.0;
+            m = zeros(12, 12);
+            for i = 1:4
+                for j = 1:4
+                    if i == j, val = 2; else, val = 1; end
+                    % 填充 3x3 对角块
+                    r = (i-1)*3+1; c = (j-1)*3+1;
+                    m(r:r+2, c:c+2) = val * factor * eye(3);
+                end
+            end
         end
     end
 

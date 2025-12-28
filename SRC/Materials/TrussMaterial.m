@@ -13,6 +13,7 @@ classdef TrussMaterial < Material
     properties
         Area % Cross-sectional Area
         Alpha % Thermal Expansion Coefficient
+        Density
     end
     
     methods

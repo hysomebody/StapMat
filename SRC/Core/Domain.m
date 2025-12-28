@@ -525,8 +525,8 @@ classdef Domain < handle
         
         % 将计算出的全局位移向量 U_val 分发回各个节点
         function UpdateNodalDisplacements(obj, U_val)
-            fprintf('Updating Nodal Displacements...\n');
-            fprintf('   NODE          X-DISP          Y-DISP          Z-DISP\n');
+            %fprintf('Updating Nodal Displacements...\n');
+            %fprintf('   NODE          X-DISP          Y-DISP          Z-DISP\n');
             
             for i = 1:obj.NUMNP
                 node = obj.NodeList(i);
@@ -542,8 +542,8 @@ classdef Domain < handle
                 node.Displacement = dispVec;   
                 
             % 打印节点平动分量，验证结果
-            fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
-                node.ID, dispVec(1), dispVec(2), dispVec(3));
+            %fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
+                %node.ID, dispVec(1), dispVec(2), dispVec(3));
             end
         end
 

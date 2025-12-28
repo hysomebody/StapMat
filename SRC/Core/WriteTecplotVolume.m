@@ -17,7 +17,7 @@ function WriteTecplotVolume(domain, filename, currentTime, isNewFile)
         node = domain.NodeList(i);
         d_vec = node.Displacement(1:3); % 仅取平动 U, V, W
         
-        NodalData(1:3, i) = node.XYZ;          
+        NodalData(1:3, i) = node.XYZ+d_vec;          
         NodalData(4:6, i) = d_vec;
         NodalData(7, i)   = norm(d_vec); % 总位移
         

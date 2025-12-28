@@ -193,7 +193,7 @@ classdef GeneralizedAlphaSolver < Solver
                         WriteTecplotVolume(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
                      else
                         WriteTecplotLine(domainObj, obj.OutputFileName, t_naf, isFirstWrite);
-                     end
+                 end
                 end
 
                % % --- 记录数据 ---
