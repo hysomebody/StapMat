@@ -1,9 +1,6 @@
 % TETRAELEMENT 4-Node Tetrahedral Element Class (Linear)
 %
-% Purpose:
-%   Represent a 4-node 3D solid element (Tetrahedron).
-%   Compute stiffness matrix for 3D elasticity.
-% 功能：实现四节点四面体单元（常应变单元 CST）。
+% 功能：实现四节点四面体单元
 %   适配新架构：每个节点 6 个自由度，但在刚度矩阵中仅填充平动 (1,2,3) 部分。
 %
 % Call procedures:
@@ -16,33 +13,28 @@
 
 classdef TetraElement < Element
     methods
-        % =================================================================
-        % Constructor (构造函数)
-        % =================================================================
+        
         function obj = TetraElement()
             obj@Element();
         end
 
-        % =================================================================
-        % Read (读取单元数据)
-        % 格式: ElementID Node1 Node2 Node3 Node4 MatID
-        % =================================================================
+       
         function Read(obj, fid, expectedID, materialList, globalNodeList)
             lineStr = fgetl(fid);
             data = str2num(lineStr); %#ok<ST2NM>
 
-            % 1. Check ID
+            
             inputID = round(data(1));
             if inputID ~= expectedID
                 error('Element ID mismatch. Expected: %d, Read: %d', expectedID, inputID);
             end
             obj.ID = inputID;
 
-            % 2. Set Nodes (4 nodes)
+            
             nIndices = [round(data(2)), round(data(3)), round(data(4)), round(data(5))];
             obj.SetNodes(globalNodeList, nIndices);
 
-            % 3. Set Material
+            
             matID = round(data(6));
             obj.Material = materialList(matID);
         end

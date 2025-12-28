@@ -430,68 +430,59 @@ classdef Domain < handle
         end
        
         % 组装全局力向量 F
-        function F = AssembleForce(obj, loadCaseIdx)
+        function [F_total, F_mech, F_thermal] = AssembleForce(obj, loadCaseIdx)
             if loadCaseIdx > obj.NLCASE
                 error('Load Case Index out of range');
             end
             
             fprintf('Assembling Force Vector for Load Case %d...\n', loadCaseIdx);
             
-            % 初始化全局力向量
-            F = zeros(obj.NEQ, 1);
+            F_mech = zeros(obj.NEQ, 1);
+            F_thermal = zeros(obj.NEQ, 1);
             
-            % 获取该工况的载荷数据
+            % ---施加集中载荷
             lc = obj.LoadCases(loadCaseIdx);
             nLoads = length(lc.Nodes);
-            
             for i = 1:nLoads
                 nodeID = lc.Nodes(i);
-                dofDir = lc.DOFs(i); % 1=X, 2=Y, 3=Z...
+                dofDir = lc.DOFs(i); 
                 mag    = lc.Mags(i);
                 
-                % 找到该节点
                 node = obj.NodeList(nodeID);
-                
-                % 获取该自由度对应的方程号
                 eqNum = node.BCode(dofDir);
-                
-                % 如果方程号 > 0，说明是自由自由度，需要施加力
                 if eqNum > 0
-                    F(eqNum) = F(eqNum) + mag;
-                else
-                    fprintf('Warning: Load applied to constrained DOF (Node %d, DOF %d)\n', nodeID, dofDir);
+                    F_mech(eqNum) = F_mech(eqNum) + mag;
                 end
             end
-            % --- 2. 施加 体积力/热载荷 (Thermal Loads) ---
-            % 遍历所有单元组
+            
+            % ---热载荷
             for g = 1:length(obj.ElemGroups)
                 elements = obj.ElemGroups{g};
                 if isempty(elements), continue; end
                 
-                % 检查该组单元是否支持热载荷计算 (即是否有 CalcThermalLoad 方法)
-                % 这样可以兼容 Truss/Beam 单元（如果它们还没写这个方法的话）
                 firstElem = elements(1);
                 if ismethod(firstElem, 'CalcThermalLoad')
                     
                     for e = 1:length(elements)
                         elem = elements(e);
                         
-                        % A. 计算单元热载荷向量 (12x1)
                         f_ele = elem.CalcThermalLoad();
                         
-                        % B. 获取定位向量 (Location Matrix)
                         lm = elem.GetLocationMatrix();
                         
-                        % C. 组装到全局向量 F
                         for i = 1:length(lm)
                             eq = lm(i);
                             if eq > 0
-                                F(eq) = F(eq) + f_ele(i);
+                                F_thermal(eq) = F_thermal(eq) + f_ele(i);
                             end
                         end
                     end
                 end
             end
+            
+            F_total = F_mech + F_thermal;
+            
+            fprintf('   Force Assembly Done. Mech Norm: %.2e, Thermal Norm: %.2e\n', norm(F_mech), norm(F_thermal));
             
         end  
         

@@ -22,7 +22,7 @@
 % Called by:
 %   ./Domain.m
 %
-% Programmed by: 宋博
+% Programmed by: 宋博 程云志
 classdef BeamElement < Element
     properties
         ReferenceVector % Reference Vector (参考向量，用于定义局部 y-z 平面)
@@ -75,6 +75,37 @@ classdef BeamElement < Element
             
             % 2. Transform to Global (坐标转换: K = T' * k_loc * T)
             k = T' * k_loc * T;
+        end
+
+        function f = CalcThermalLoad(obj)
+            node1 = obj.Nodes(1);
+            node2 = obj.Nodes(2);
+            
+            dx = node2.XYZ(1) - node1.XYZ(1);
+            dy = node2.XYZ(2) - node1.XYZ(2);
+            dz = node2.XYZ(3) - node1.XYZ(3);
+            L = sqrt(dx^2 + dy^2 + dz^2);
+            
+            if L < 1e-12, L=1; end
+            n = [dx/L; dy/L; dz/L];
+            T1 = 0; T2 = 0;
+            if isprop(node1, 'Temperature'), T1 = node1.Temperature; end
+            if isprop(node2, 'Temperature'), T2 = node2.Temperature; end
+            T_avg = (T1 + T2) / 2.0;
+            
+            Alpha = 0.0;
+            if isprop(obj.Material, 'Alpha'), Alpha = obj.Material.Alpha; end
+            
+            E = obj.Material.E;
+            A = obj.Material.Area;
+            F_mag = E * A * Alpha * T_avg;
+            
+            f = zeros(12, 1);
+            
+            f(1:3) = -F_mag * n;
+            
+            f(7:9) =  F_mag * n;
+            
         end
         
         % GetLocationMatrix (获取定位向量/方程号)
@@ -167,9 +198,21 @@ classdef BeamElement < Element
             % [Fx1, Fy1, Fz1, Mx1, My1, Mz1, Fx2, Fy2, Fz2, Mx2, My2, Mz2]'
             f_loc = k_loc * u_loc;
             
-            % 5. 提取内力
-            % 轴力 N (取节点2的力，拉为正)
-            N  = f_loc(7); 
+            Alpha = 0.0;
+            if isprop(obj.Material, 'Alpha'), Alpha = obj.Material.Alpha; end
+            
+            T1 = 0; T2 = 0;
+            if isprop(obj.Nodes(1), 'Temperature'), T1 = obj.Nodes(1).Temperature; end
+            if isprop(obj.Nodes(2), 'Temperature'), T2 = obj.Nodes(2).Temperature; end
+            T_avg = (T1 + T2) / 2.0;
+            
+            % 计算热轴力 F_thermal = E * A * Alpha * dT
+            E = obj.Material.E;
+            A = obj.Material.Area;
+            F_thermal = E * A * Alpha * T_avg;
+            
+            % 5. 提取内力 (修正轴力)
+            N  = f_loc(7) - F_thermal; 
             
             % 弯矩 
             % 局部坐标系下：

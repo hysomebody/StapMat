@@ -17,6 +17,7 @@ classdef BeamMaterial < Material
         Iy      % Moment of inertia about local y-axis
         Iz      % Moment of inertia about local z-axis
         J       % Torsional constant (Polar moment of inertia)
+        Alpha
     end
     
     methods
@@ -63,6 +64,11 @@ classdef BeamMaterial < Material
             else
                 obj.Density = 0.0;
                 fprintf('Warning: No density found for BeamMaterial %d. Assuming 0.\n', obj.ID);
+            end
+            if length(data) >= 9
+                obj.Alpha = data(9);
+            else
+                obj.Alpha = 0.0; 
             end
 
         end

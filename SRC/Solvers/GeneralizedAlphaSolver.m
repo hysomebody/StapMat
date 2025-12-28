@@ -68,14 +68,14 @@ classdef GeneralizedAlphaSolver < Solver
             end
             
             % 1. 获取空间分布 (从输入文件读取 Load Case 1)
-            F_static = domainObj.AssembleForce(1);
+            [~, F_mech, F_thermal] = domainObj.AssembleForce(1);
 
             % 2. 定义时间函数 (针对算例: sin(omega * t))
             omega = 60; 
             time_func = @(t) sin(omega * t);
             
             % 3. 组合成 fhandle 
-            fhandle = @(t) F_static * time_func(t);
+            fhandle = @(t) F_thermal + F_mech * time_func(t);
             
           %  % 初始化历史记录
           %  % A. 尝试监控第一个受载节点
