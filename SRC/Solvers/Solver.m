@@ -1,12 +1,8 @@
 classdef (Abstract) Solver < handle
-    % SOLVER Abstract base class for all solvers
-    %
-    % Purpose:
-    %   Define the standard interface that all solvers (Static, Dynamic) must follow.
+% 定义求解器的标准接口
     
+% 抽象接口
     methods (Abstract)
-        % Abstract method: Execute the solution process
-        % Input: domainObj - The Domain instance containing K, M, F, etc.
         Solve(obj, domainObj)
     end
 end

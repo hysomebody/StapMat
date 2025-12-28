@@ -1,14 +1,13 @@
 classdef StaticSolver < Solver
-    % STATICSOLVER Linear Static Solver
+    % 求解静力学问题
     %
-    % Purpose:
-    %   Solve Ku = F for multiple load cases.
+    % 仅求解 K * u = F
     
     methods
         function Solve(obj, domainObj)
             fprintf(' [StaticSolver] Start Solving...\n');
             
-            % 1. Check Stiffness Matrix
+            % 先检查一些刚度矩阵
             if isempty(domainObj.GlobalK)
                 error('Global Stiffness Matrix K is empty! Run Assemble() first.');
             end
@@ -16,16 +15,11 @@ classdef StaticSolver < Solver
             K = domainObj.GlobalK;
             nCases = domainObj.NLCASE;
             
-            % 2. Loop over all Load Cases
             for lc = 1:nCases
-                % Call Domain to assemble force vector F for this case
                 F = domainObj.AssembleForce(lc);
-                
-                % Solve Linear System
                 fprintf('   Processing Load Case %d...\n', lc);
                 U = K \ F;
                 
-                % Update Domain with results (Optional: print or store)
                 domainObj.UpdateNodalDisplacements(U);
             end
             

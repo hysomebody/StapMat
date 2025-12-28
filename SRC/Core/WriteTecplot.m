@@ -69,10 +69,7 @@ for L = 1:NLCASE
         
         for e = 1:length(elements)
             el = elements(e);
-            
-            % Tecplot 的 FEQUADRILATERAL 需要 4 个节点。
-            % 如果是 2 节点单元 (梁/杆)，重复最后节点以填充。
-            
+             
             for n=1:4
                 % 简单的防止索引越界逻辑 (如果单元只有2个节点，ceil(3/2)=2, ceil(4/2)=2)
                 idx = ceil(n * NUM_Nodes / 4.0); 

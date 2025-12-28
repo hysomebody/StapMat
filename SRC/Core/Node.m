@@ -1,8 +1,4 @@
-% NODE Node class for FEM Analysis
-%
-% Purpose:
-%   Store nodal coordinates and boundary condition codes (BCode).
-%   Manage 6 Degrees of Freedom (NDF=6) per node.
+% 
 % 功能：储存节点信息，管理坐标和 6 个自由度的边界条件。
 % 
 % Call procedures:
@@ -14,20 +10,18 @@
 
 classdef Node < handle
     properties (Constant)
-        NDF = 6; % Global Degrees of Freedom per node (X, Y, Z, RX, RY, RZ)
+        NDF = 6; %  X, Y, Z, RX, RY, RZ
     end
     
     properties
-        ID      % (int) Node Number
-        XYZ     % (3x1 double) Coordinates [X; Y; Z]
-        BCode   % (6x1 int) Boundary Condition Codes 
-                % 0 = Active (Free), 1 = Fixed
+        ID      
+        XYZ     
+        BCode         % 0 = Free, 1 = Fixed
         Displacement  % 存储节点的 6 自由度位移向量
-        Temperature   % (double) Nodal Temperature
+        Temperature   % 节点温度，用于热应力
     end
     
     methods
-        % Constructor
         function obj = Node()
             obj.ID = 0;
             obj.XYZ = zeros(3, 1);
@@ -36,11 +30,8 @@ classdef Node < handle
             obj.Temperature = 0.0; % 初始化温度
         end
         
-        % Read nodal data from file stream
+
         function Read(obj, fid, expectedID)
-            % Call procedures: None
-            % Called by: ./Domain.m - ReadNodalPoints()
-            
             % 循环以跳过空行和纯注释行
             data = [];
             while isempty(data)
@@ -58,18 +49,17 @@ classdef Node < handle
                 error('Error reading node data for expected ID: %d', expectedID);
             end
             
-            % 1. Read ID
             inputID = round(data(1));
             if inputID ~= expectedID
                 error('Node ID mismatch. Expected: %d, Read: %d', expectedID, inputID);
             end
             obj.ID = inputID;
             
-            % 2. 根据数据列数判断格式
+            % 根据数据列数判断格式
             colCount = length(data);
             
             if colCount == 7 
-                % --- 格式 A: 3 BCs (Truss单元) ---
+                % 格式 A: 3 BCs (Truss单元)
                 % ID, BC1, BC2, BC3, X, Y, Z
                 
                 obj.BCode(1:3) = round(data(2:4));
@@ -80,7 +70,7 @@ classdef Node < handle
                 obj.XYZ(1:3) = data(5:7);
                 
             elseif colCount == 10 || colCount == 11
-                % --- 格式 B: 6 BCs (Beam/Shell) ---
+                % 格式 B: 6 BCs Beam
                 % Base: ID, BC1..BC6, X, Y, Z (10 cols)
                 % Ext : ID, BC1..BC6, X, Y, Z, Temp (11 cols)
                 

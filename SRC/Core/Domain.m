@@ -1,10 +1,10 @@
 % DOMAIN Root class for the Finite Element Problem
 %
-% Purpose:
-%   Manage global data (NodeList, Elements, Materials, LoadCases).
-%   Orchestrate the analysis process (Read -> Number -> Assemble -> Solve).
-% 功能：整个程序的大管家，读取材料、读取单元、计算方程号和组装刚度矩阵
-% 
+% 功能：
+%   核心管理类。
+%   1. 管理全局数据：节点列表 (NodeList)、单元组 (ElemGroups)、材料集 (MaterialSets)、载荷工况 (LoadCases)。
+%   2. 调度分析流程：读取数据 -> 编号 -> 组装矩阵 -> 求解 -> 回写结果。 
+%
 % Call procedures:
 %   ./Node.m - Read()
 %   ./TrussMaterial.m - Read()
@@ -19,30 +19,29 @@ classdef Domain < handle
 
     properties
         % Control Data
-        Title       % Problem Title
+        Title       % 标题行
         MODEX       % 0: Data Check, 1: Execution
-        NLCASE      % Number of Load Cases 载荷数量
+        NLCASE      % Number of Load Cases 载荷工况数量
         AnalysisType % 0: Static, 1: Dynamic
-        DynParams    % Struct: .dt, .nSteps, .rho_inf, .alpha, .beta
+        DynParams    % Struct: .dt, .nSteps, .rho_inf, .alpha, .beta 动力学参数结构体
         
         % Infrastructure
-        NodeList    % (Array of Node) All nodes
-        ElemGroups  % (Cell array) Stores arrays of Elements (e.g., {TrussEleArray, BeamEleArray})
-        MaterialSets% (Cell array) Stores arrays of Materials
+        NodeList    % 节点对象数组(存储所有 Node)
+        ElemGroups  % 单元组，每个 Cell 存储一种类型的单元数组
+        MaterialSets% 材料集
         
         % Solution Data
-        NEQ         % Total Number of Equations
-        GlobalK     % Global Stiffness Matrix (Sparse)
-        GlobalM     % Global Mass Matrix (Sparse)
-        LoadCases   % (Struct Array) Placeholder for load data
+        NEQ         % 总方程数 (系统自由度总和)
+        GlobalK     % 全局刚度矩阵 (稀疏矩阵格式)
+        GlobalM     % 全局质量矩阵 (稀疏矩阵格式)
+        LoadCases   % 载荷工况数组
         
         % Counters
-        NUMNP       % Number of Nodal Points
-        NUMEG       % Number of Element Groups
+        NUMNP       % Number of Nodal Points 节点总数
+        NUMEG       % Number of Element Groups 单元组总数
     end
     
     methods (Static)
-        % Singleton Instance Access
         function obj = Instance()
             persistent uniqueInstance
             if isempty(uniqueInstance)
@@ -53,7 +52,6 @@ classdef Domain < handle
     end
     
     methods (Access = private)
-        % Private Constructor
         function obj = Domain()
             obj.NodeList = Node.empty;
             obj.ElemGroups = {};
@@ -74,32 +72,18 @@ classdef Domain < handle
             obj.NUMNP = 0;
             obj.NUMEG = 0;
             obj.ElemGroups = [] ;
-            % 如果有时间步相关参数，建议也重置，例如：
-            % obj.DynParams = []; 
         end
-        % ==========================================================
 
-        % Main entry point to read input file
         function success = ReadData(obj, filename)
-
             obj.Reset();
-
             fid = fopen(filename, 'r');
             if fid == -1
                 error('Cannot open file: %s', filename);
             end
             
-            try
-                % % 取新文件前，清除上一次分析的残留矩阵
-                % obj.GlobalK = [];
-                % obj.GlobalM = [];
-               
+            try         
                 fprintf('Input phase ...\n');
-                
-                % 1. Read Heading
                 obj.Title = fgetl(fid);
-                
-                % 2. Read Control Line
                 lineStr = fgetl(fid);
                 tmp = str2num(lineStr); %#ok<ST2NM>
                 obj.NUMNP  = round(tmp(1));
@@ -107,6 +91,7 @@ classdef Domain < handle
                 obj.NLCASE = round(tmp(3));
                 obj.MODEX  = round(tmp(4));
 
+                % 这行参数大于5说明是动力学问题求解
                 if length(tmp) >= 5
                     obj.AnalysisType = round(tmp(5));
                 else
@@ -116,7 +101,7 @@ classdef Domain < handle
                 % 如果是动力学，读取下一行参数
                 if obj.AnalysisType == 1
                     lineStr = fgetl(fid);
-                    dtmp = str2num(lineStr); %#ok<ST2NM>
+                    dtmp = str2num(lineStr);
                     if isempty(dtmp)
                         error('Dynamic Analysis selected but parameters line is missing.');
                     end
@@ -125,7 +110,7 @@ classdef Domain < handle
                     obj.DynParams.nSteps  = round(dtmp(2));
                     obj.DynParams.rho_inf = dtmp(3);
                     
-                    % 读取阻尼 (可选)
+                    % 读取阻尼参数
                     if length(dtmp) >= 5
                         obj.DynParams.alpha = dtmp(4);
                         obj.DynParams.beta  = dtmp(5);
@@ -138,16 +123,16 @@ classdef Domain < handle
                         obj.DynParams.dt, obj.DynParams.nSteps, obj.DynParams.rho_inf);
                 end
 
-                % 3. Read Nodal Points
+                % 读取节点坐标与边界条件
                 obj.ReadNodalPoints(fid);
                 
-                % 4. Calculate Equation Numbers (Crucial for 6DOF)
+                % 计算全局方程号
                 obj.CalculateEquationNumber();
                 
-                % 5. Read Load Cases
+                % 读取载荷工况
                 obj.ReadLoadCases(fid);
                 
-                % 6. Read Element Groups
+                % 读取单元组 (材料与单元连接)
                 obj.ReadElements(fid);
                 
                 fclose(fid);
@@ -161,7 +146,6 @@ classdef Domain < handle
             end
         end
         
-        % Read Node data block
         function ReadNodalPoints(obj, fid)
             fprintf('Reading %d Nodal Points...\n', obj.NUMNP);
             obj.NodeList = Node.empty(0, obj.NUMNP); % Pre-allocate
@@ -172,21 +156,18 @@ classdef Domain < handle
             end
         end
         
-        % Calculate global equation numbers based on BCs
+        % 计算方程号
         function CalculateEquationNumber(obj)
             fprintf('Calculating Equation Numbers (NDF=6)...\n');
             obj.NEQ = 0;
             
-            % Loop over all nodes
             for i = 1:obj.NUMNP
                 node = obj.NodeList(i);
-                for dof = 1:Node.NDF % Loop 1 to 6
+                for dof = 1:Node.NDF % 6个自由度
                     if node.BCode(dof) == 0
-                        % If BC is 0 (Free), assign a new equation number
-                        obj.NEQ = obj.NEQ + 1;
+                        obj.NEQ = obj.NEQ + 1; % BC = 0 ,自由，分配新的方程号
                         node.BCode(dof) = obj.NEQ;
                     else
-                        % If BC is 1 (Fixed), assign 0
                         node.BCode(dof) = 0;
                     end
                 end
@@ -194,11 +175,8 @@ classdef Domain < handle
             fprintf('Total Active Equations (NEQ): %d\n', obj.NEQ);
         end
         
-        % Read Load Cases (Simplified implementation for now)
+        % 读取载荷工况
         function ReadLoadCases(obj, fid)
-            % Format based on stap90.in:
-            % Line 1: LoadCaseNum, NumConcentratedLoads
-            % Following lines: NodeID, DOF, Magnitude
             
             obj.LoadCases = struct('Nodes', [], 'DOFs', [], 'Mags', []);
             
@@ -209,7 +187,7 @@ classdef Domain < handle
                     if ~ischar(lineStr) % 遇到文件尾
                         error('Unexpected End of File while reading Load Case %d header.', i);
                     end
-                    tmp = str2num(lineStr); %#ok<ST2NM>
+                    tmp = str2num(lineStr); 
                 end
 
                 lcNum = tmp(1);
@@ -228,7 +206,7 @@ classdef Domain < handle
                         if ~ischar(lLine)
                             error('Unexpected End of File while reading Load data (Case %d, Load %d).', i, j);
                         end
-                        lData = str2num(lLine); %#ok<ST2NM>
+                        lData = str2num(lLine); 
                     end
                     % ------------------------------------------------
                     nodes(j) = lData(1);
@@ -242,21 +220,19 @@ classdef Domain < handle
             end
         end
         
-        % Read Element Groups
+        % 读单元组
         function ReadElements(obj, fid)
             fprintf('Reading %d Element Groups...\n', obj.NUMEG);
             
             for grp = 1:obj.NUMEG
-                % 读取：循环跳过空行 ---
                 tmp = [];
                 while isempty(tmp)
                     lineStr = fgetl(fid);
                     if ~ischar(lineStr)
                          error('Unexpected End of File reading Element Group %d.', grp);
                     end
-                    tmp = str2num(lineStr); %#ok<ST2NM>
+                    tmp = str2num(lineStr); 
                 end
-                % -------------------------------------
                 
                 eType = tmp(1);
                 nEle  = tmp(2);
@@ -265,7 +241,6 @@ classdef Domain < handle
                 fprintf('Group %d: Type=%d, Elements=%d, Materials=%d\n', grp, eType, nEle, nMat);
                 
                 if eType == 1 % Truss Element
-                    % 1. Read Materials for this group
                     mats = TrussMaterial.empty(0, nMat);
                     for m = 1:nMat
                         mats(m) = TrussMaterial();
@@ -273,17 +248,14 @@ classdef Domain < handle
                     end
                     obj.MaterialSets{grp} = mats;
                     
-                    % 2. Read Elements for this group
                     eles = TrussElement.empty(0, nEle);
                     for e = 1:nEle
                         eles(e) = TrussElement();
-                        % Pass global NodeList and local MaterialList
                         eles(e).Read(fid, e, mats, obj.NodeList);
                     end
                     obj.ElemGroups{grp} = eles;
                     
                 elseif eType == 2 %  Beam Element
-                    % 1. Read Materials for this group (BeamMaterial)
                     mats = BeamMaterial.empty(0, nMat);
                     for m = 1:nMat
                         mats(m) = BeamMaterial();
@@ -291,17 +263,14 @@ classdef Domain < handle
                     end
                     obj.MaterialSets{grp} = mats;
                     
-                    % 2. Read Elements for this group (BeamElement)
                     eles = BeamElement.empty(0, nEle);
                     for e = 1:nEle
                         eles(e) = BeamElement();
-                        % Pass global NodeList (to link nodes) and local MaterialList
                         eles(e).Read(fid, e, mats, obj.NodeList);
                     end
                     obj.ElemGroups{grp} = eles;
 
-                elseif eType == 3 % Tetra Element (New Implementation)
-                    % 1. Read Materials (TetraMaterial)
+                elseif eType == 3 % Tetra Element 
                     mats = TetraMaterial.empty(0, nMat);
                     for m = 1:nMat
                         mats(m) = TetraMaterial();
@@ -309,7 +278,6 @@ classdef Domain < handle
                     end
                     obj.MaterialSets{grp} = mats;
                     
-                    % 2. Read Elements (TetraElement)
                     eles = TetraElement.empty(0, nEle);
                     for e = 1:nEle
                         eles(e) = TetraElement();
@@ -323,12 +291,10 @@ classdef Domain < handle
             end
         end
         
-        % 组装全局刚度矩阵 Assemble Global Stiffness Matrix
+        % 组装全局刚度矩阵
         function AssembleStiffnessMatrix(obj)
             fprintf('Assembling Global Stiffness Matrix...\n');
             
-            % Estimate non-zeros to pre-allocate sparse triplet
-            % Conservative guess: 12x12 per element
             totalEle = 0;
             for g = 1:length(obj.ElemGroups)
                 totalEle = totalEle + length(obj.ElemGroups{g});
@@ -341,31 +307,25 @@ classdef Domain < handle
             
             count = 0;
             
-            % Loop over all groups
+
             for g = 1:length(obj.ElemGroups)
                 elements = obj.ElemGroups{g};
                 
-                % Loop over elements in group
                 for e = 1:length(elements)
                     elem = elements(e);
-                    
-                    % 1. Get Element Stiffness (12x12)
+                    % 单元刚度矩阵
                     ke = elem.CalcStiffness();
-                    
-                    % 2. Get Location Matrix (Equation numbers)
+                    % 定位向量
                     lm = elem.GetLocationMatrix();
-                    
-                    % 3. Assemble into triplet vectors
                     for r = 1:12
                         rowEq = lm(r);
-                        if rowEq == 0; continue; end % Constrained DOF
+                        if rowEq == 0; continue; end 
                         
                         for c = 1:12
                             colEq = lm(c);
                             if colEq == 0; continue; end
                             
                             count = count + 1;
-                            % 动态扩容防止溢出 (Safety check)
                             if count > length(I_idx)
                                 I_idx(end*2) = 0;
                                 J_idx(end*2) = 0;
@@ -380,7 +340,6 @@ classdef Domain < handle
                 end
             end
             
-            % Trim unused pre-allocation
             if count == 0
                 warning('Stiffness Matrix is empty!');
                 obj.GlobalK = sparse(obj.NEQ, obj.NEQ);
@@ -390,32 +349,25 @@ classdef Domain < handle
             J_idx = J_idx(1:count);
             K_val = K_val(1:count);
             
-            % --- 诊断与自动修正 ---
             max_I = max(I_idx);
             max_J = max(J_idx);
             max_Idx = max(max_I, max_J);
             
             if max_Idx > obj.NEQ
                 fprintf('Error: Max Index (%d) > NEQ (%d). Resizing Global Matrix.\n', max_Idx, obj.NEQ);
-                % 强制修正维度，避免报错，允许程序继续运行以查看结果
                 obj.NEQ = max_Idx; 
             elseif obj.NEQ > max_Idx
-                % 这通常是正常的（有些方程可能没有任何刚度贡献，尽管少见），但值得注意
-                % fprintf('Info: NEQ (%d) > Max Index in K (%d).\n', obj.NEQ, max_Idx);
             end
-            % --------------------
             
-            % Create Sparse Matrix
             obj.GlobalK = sparse(I_idx, J_idx, K_val, obj.NEQ, obj.NEQ);
             
             fprintf('Assembly Done. Matrix Size: %dx%d, Non-zeros: %d\n', ...
                 obj.NEQ, obj.NEQ, nnz(obj.GlobalK));
         end
         
-        % 组装全局质量矩阵 (类似 AssembleStiffnessMatrix)
+        % 组装全局质量矩阵（动力学计算用）
         function AssembleMassMatrix(obj)
             fprintf('Assembling Global Mass Matrix...\n');
-            % 预估非零元 (跟刚度矩阵一样)
             totalEle = 0;
             for g = 1:length(obj.ElemGroups)
                 totalEle = totalEle + length(obj.ElemGroups{g});
@@ -433,13 +385,11 @@ classdef Domain < handle
                 for e = 1:length(elements)
                     elem = elements(e);
                     
-                    % 1. 获取单元质量矩阵
-                    me = elem.CalcMass(); % 调用单元的接口
-                    
-                    % 2. 获取定位向量
+                    % 单元质量矩阵
+                    me = elem.CalcMass(); 
+                    % 定位向量
                     lm = elem.GetLocationMatrix();
-                    
-                    % 3. 组装
+
                     for r = 1:12
                         rowEq = lm(r);
                         if rowEq == 0; continue; end 
@@ -457,7 +407,6 @@ classdef Domain < handle
                 end
             end
             
-            % 裁剪并生成稀疏矩阵
             I_idx = I_idx(1:count);
             J_idx = J_idx(1:count);
             M_val = M_val(1:count);
@@ -487,13 +436,11 @@ classdef Domain < handle
                 dofDir = lc.DOFs(i); % 1=X, 2=Y, 3=Z...
                 mag    = lc.Mags(i);
                 
-                % 找到该节点
                 node = obj.NodeList(nodeID);
                 
                 % 获取该自由度对应的方程号
                 eqNum = node.BCode(dofDir);
                 
-                % 如果方程号 > 0，说明是自由自由度，需要施加力
                 if eqNum > 0
                     F(eqNum) = F(eqNum) + mag;
                 else
@@ -504,8 +451,8 @@ classdef Domain < handle
         
         % 将计算出的全局位移向量 U_val 分发回各个节点
         function UpdateNodalDisplacements(obj, U_val)
-            fprintf('Updating Nodal Displacements...\n');
-            fprintf('   NODE          X-DISP          Y-DISP          Z-DISP\n');
+            % fprintf('Updating Nodal Displacements...\n');
+            % fprintf('   NODE          X-DISP          Y-DISP          Z-DISP\n');
             
             for i = 1:obj.NUMNP
                 node = obj.NodeList(i);
@@ -517,12 +464,11 @@ classdef Domain < handle
                         dispVec(dof) = U_val(eq);
                     end
                 end
-            % 将计算结果存入节点对象 
                 node.Displacement = dispVec;   
                 
-            % 打印节点平动分量，验证结果
-            fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
-                node.ID, dispVec(1), dispVec(2), dispVec(3));
+            % % 打印节点平动分量，验证结果
+            % fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
+            %     node.ID, dispVec(1), dispVec(2), dispVec(3));
             end
         end
 

@@ -1,28 +1,23 @@
-% BEAMMATERIAL Material definition for 3D Beam elements
-%
-% Purpose:
-%   Extends base Material to include Sectional properties for Beam.
-%   Properties: E, G, Area, Iy, Iz, J
+% 
 % 功能：增加梁单元需要的剪切模量G,截面积A,惯性矩Iy Iz, 扭转常数J
 % Call procedures:
-%   ./Material.m - Material() (Base Constructor)
+%   ./Material.m - Material() 
 %
 % Called by:
 %   ./Domain.m - ReadElements()
 
 classdef BeamMaterial < Material
     properties
-        G       % Shear Modulus
-        Area    % Cross-sectional Area
-        Iy      % Moment of inertia about local y-axis
-        Iz      % Moment of inertia about local z-axis
-        J       % Torsional constant (Polar moment of inertia)
+        G       
+        Area    
+        Iy      
+        Iz      
+        J       
     end
     
     methods
-        % Constructor
         function obj = BeamMaterial()
-            obj@Material(); % Call base constructor
+            obj@Material();
             obj.G = 0.0;
             obj.Area = 0.0;
             obj.Iy = 0.0;
@@ -30,13 +25,7 @@ classdef BeamMaterial < Material
             obj.J = 0.0;
         end
         
-        % Read material data from file stream
-        % Format: ID(int) E(double) G(double) A(double) Iy(double)
-        % Iz(double) J(double) Density(double)
         function Read(obj, fid, expectedID)
-            % Call procedures: None
-            % Called by: ./Domain.m - ReadElements()
-            
             lineStr = fgetl(fid);
             data = str2num(lineStr); %#ok<ST2NM>
             
@@ -44,20 +33,18 @@ classdef BeamMaterial < Material
                 error('Error reading BeamMaterial data');
             end
             
-            % 1. Check ID
             inputID = round(data(1));
             if inputID ~= expectedID
                 error('Material ID mismatch. Expected: %d, Read: %d', expectedID, inputID);
             end
             obj.ID = inputID;
-            
-            % 2. Read Properties (Reference C++ BeamMaterial::Read line 924)
             obj.E  = data(2);
             obj.G  = data(3);
             obj.Area = data(4);
             obj.Iy = data(5);
             obj.Iz = data(6);
             obj.J  = data(7);
+            % 动力学部分需要密度，如果输入文件中没定义默认为0
             if length(data) >= 8
                 obj.Density = data(8);
             else

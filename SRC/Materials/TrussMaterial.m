@@ -1,30 +1,24 @@
-% TRUSSMATERIAL Material definition for Truss elements
 %
-% Purpose:
-%   Extends base Material to include Cross-Sectional Area.
 % 功能：除Material类中共有的材料属性外，增加桁架单元需要的截面积 Area。
 % Call procedures:
-%   ./Material.m - Material() (Base Constructor)
+%   ./Material.m - Material() 
 %
 % Called by:
-%   ./Domain.m (when parsing Truss groups)
+%   ./Domain.m 
     
 classdef TrussMaterial < Material
     properties
-        Area % Cross-sectional Area
+        Area 
     end
     
     methods
-        % Constructor
         function obj = TrussMaterial()
-            obj@Material(); % Call base constructor
+            obj@Material(); 
             obj.Area = 0.0;
         end
         
-        % Read material data from file stream
-        % Format: ID(int) E(double) Area(double) Density(double)
+        % Format: ID E Area Density
         function Read(obj, fid, expectedID)
-            % called by: Domain.ReadTrussElementData (to be implemented)
             
             lineStr = fgetl(fid);
             data = str2num(lineStr); %#ok<ST2NM>
@@ -33,16 +27,13 @@ classdef TrussMaterial < Material
                 error('Error reading TrussMaterial data');
             end
             
-            % 1. Check ID
             inputID = round(data(1));
             if inputID ~= expectedID
                 error('Material ID mismatch. Expected: %d, Read: %d', expectedID, inputID);
             end
-            obj.ID = inputID;
-            
-            % 2. Read Properties
-            obj.E = data(2);    % From Base Class
-            obj.Area = data(3); % Specific to Truss
+            obj.ID = inputID;          
+            obj.E = data(2);    
+            obj.Area = data(3); 
 
             if length(data) >= 4
                 obj.Density = data(4);

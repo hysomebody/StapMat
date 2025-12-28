@@ -1,49 +1,44 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% FILE PATH: stapmat.m
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function stapmat(inputFileName)
 % STAPMAT 主程序 (支持静态与动力学分析)
 %
 % 用法:
-%   命令行键入stapmat('Data/stap90.in')，或修改为其他输入文件
+%   命令行键入stapmat('Data/stap90.in')，或其他输入文件名（确保输入文件要放在Data文件夹）
 % 动力学问题：
-%   载荷的时间函数可在SRC\Solvers\GeneralizedAlphaSolver.m中修改，默认是正弦输入
-%   也可改为阶跃输入等
+%   载荷的时间函数可在SRC\Solvers\GeneralizedAlphaSolver.m中修改，默认是阶跃输入
+%   也可改为正弦输入等
 
- 
     % 设置路径 
     addpath(genpath('SRC')); 
     addpath(genpath('Data')); 
     
-    % 准备输出文件
+    % 输出文件，.out文件仅用于简单查看平动位移，.plt文件用于绘图
     [pathstr, name, ~] = fileparts(inputFileName);
     outputFileName = fullfile(pathstr, [name, '.out']);
-    pltFileName = fullfile(pathstr, [name, '.plt']);
+    % pltFileName = fullfile(pathstr, [name, '.plt']);
     
     fidOut = fopen(outputFileName, 'w');
     if fidOut == -1, error('无法创建输出文件: %s', outputFileName); end
     finishup = onCleanup(@() fclose(fidOut));
 
-    % --- 1. 读取数据 ---
+    % 读取数据 
     femDomain = Domain.Instance();
     if ~femDomain.ReadData(inputFileName)
         error('读取输入文件失败。');
     end
 
-    % --- 2. 输出控制信息 ---
     fprintf(fidOut, ' C O N T R O L   I N F O R M A T I O N\n\n');
     fprintf(fidOut, '      NUMBER OF NODAL POINTS . . . . . . . (NUMNP)  = %10d\n', femDomain.NUMNP);
     fprintf(fidOut, '      NUMBER OF ELEMENT GROUPS . . . . . . (NUMEG)  = %10d\n', femDomain.NUMEG);
     fprintf(fidOut, '      NUMBER OF LOAD CASES . . . . . . . . (NLCASE) = %10d\n', femDomain.NLCASE);
     fprintf(fidOut, '      SOLUTION MODE  . . . . . . . . . . . (MODEX)  = %10d\n\n', femDomain.MODEX);
 
-    % --- 3. 求解阶段 ---
+    % 求解-
     tic;
     
-    % 3.1 组装刚度矩阵 (无论是静态还是动力学都需要)
+    % 组装刚度矩阵
     femDomain.AssembleStiffnessMatrix();
     
-    % 定义静力学和动力学结果的文件名
+    % 定义静力学和动力学结果的文件名，用于在Tecplot中画图
     fileStatic  = fullfile('Data', [name, '_Static.plt']);
     fileDynamic = fullfile('Data', [name, '_Dynamic.plt']);
 
@@ -53,25 +48,15 @@ function stapmat(inputFileName)
         fprintf('\n [Step 1] Running Static Analysis for Reference...\n');
         staticSolver = StaticSolver();
         staticSolver.Solve(femDomain);
-        
-        % 输出静力学 .plt 文件
         fprintf('   Writing Static Reference to: %s\n', fileStatic);
-        % 参数: domain, 文件名, 时间0.0, 是否新文件(true)
         WriteTecplotLine(femDomain, fileStatic, 0.0, true);
 
+        % 动力学求解
         if femDomain.AnalysisType == 1
-            % --- 动力学分析 ---
             fprintf('\n [Step 2] Dynamic Analysis Selected. Starting...\n');
-            
-            p = femDomain.DynParams; % 从 Domain 获取读取的参数
-            
-            % 实例化广义-alpha 动力学求解器
+            p = femDomain.DynParams;
             solver = GeneralizedAlphaSolver(p.dt, p.nSteps, p.rho_inf, p.alpha, p.beta);
-
-            % 将 _Dynamic.plt 文件名传给求解器
             solver.OutputFileName = fileDynamic;
-            
-            % 执行求解
             solver.Solve(femDomain);
             
         else
@@ -79,13 +64,10 @@ function stapmat(inputFileName)
         end
     end
     
-        % 执行求解 (多态调用)
         % solver.Solve(femDomain); 
-    
     totalTime = toc;
 
-    % --- 4. 输出最终结果 ---
-    % 对于动力学，这里输出的是最后一帧的位移；对于静力学，是平衡位置
+    % 对于动力学，输出的最后一帧的位移；对于静力学，是平衡位置
     fprintf(fidOut, '\n D I S P L A C E M E N T S (Final State)\n\n');
     fprintf(fidOut, '    NODE           X-DISPLACEMENT    Y-DISPLACEMENT    Z-DISPLACEMENT\n');
     for i = 1:femDomain.NUMNP
