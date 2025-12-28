@@ -10,18 +10,18 @@
 %
 % Called by:
 %   ./Domain.m - ReadElements()
+% 程云志
 
 classdef TetraMaterial < Material
     properties
-        Nu      % Poisson's Ratio (泊松比)
-        Rho     % Density (密度)
-        Alpha   % Thermal Expansion Coefficient (热膨胀系数)
+        Nu      % Poisson's Ratio
+        Rho     % Density
+        Alpha   % Thermal Expansion Coefficient
     end
     
     methods
-        % Constructor
         function obj = TetraMaterial()
-            obj@Material(); % Call base constructor
+            obj@Material(); 
             obj.Nu = 0.3;
             obj.Rho = 0.0;
             obj.Alpha = 0.0;
@@ -33,7 +33,7 @@ classdef TetraMaterial < Material
         function Read(obj, fid, expectedID)
             
             lineStr = fgetl(fid);
-            data = str2num(lineStr); %#ok<ST2NM>
+            data = str2num(lineStr); 
             
             if isempty(data)
                 error('Error reading TetraMaterial data');
@@ -49,7 +49,7 @@ classdef TetraMaterial < Material
             % 2. Read Properties
             % 顺序: ID, RHO, E, NU, ALPHA
             obj.Rho = data(2);
-            obj.E   = data(3); % Inherited from Material
+            obj.E   = data(3); 
             obj.Nu  = data(4);
             
             if length(data) >= 5

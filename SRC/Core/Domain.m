@@ -468,44 +468,65 @@ classdef Domain < handle
         end
        
         % 组装全局力向量 F
-        function F = AssembleForce(obj, loadCaseIdx)
+        function [F_total, F_mech, F_thermal] = AssembleForce(obj, loadCaseIdx)
             if loadCaseIdx > obj.NLCASE
                 error('Load Case Index out of range');
             end
             
-            fprintf('Assembling Force Vector for Load Case %d...\n', loadCaseIdx);
+            fprintf('Assembling Force Vector for Load Case %d (Separating Mech & Thermal)...\n', loadCaseIdx);
             
-            % 初始化全局力向量
-            F = zeros(obj.NEQ, 1);
+            F_mech = zeros(obj.NEQ, 1);
+            F_thermal = zeros(obj.NEQ, 1);
             
-            % 获取该工况的载荷数据
+            % --- 1. 施加集中载荷
             lc = obj.LoadCases(loadCaseIdx);
             nLoads = length(lc.Nodes);
-            
             for i = 1:nLoads
                 nodeID = lc.Nodes(i);
-                dofDir = lc.DOFs(i); % 1=X, 2=Y, 3=Z...
+                dofDir = lc.DOFs(i); 
                 mag    = lc.Mags(i);
                 
-                % 找到该节点
                 node = obj.NodeList(nodeID);
-                
-                % 获取该自由度对应的方程号
                 eqNum = node.BCode(dofDir);
-                
-                % 如果方程号 > 0，说明是自由自由度，需要施加力
                 if eqNum > 0
-                    F(eqNum) = F(eqNum) + mag;
-                else
-                    fprintf('Warning: Load applied to constrained DOF (Node %d, DOF %d)\n', nodeID, dofDir);
+                    F_mech(eqNum) = F_mech(eqNum) + mag;
                 end
             end
-        end  
+            
+            % --- 2. 施加 热载荷
+            for g = 1:length(obj.ElemGroups)
+                elements = obj.ElemGroups{g};
+                if isempty(elements), continue; end
+                
+                firstElem = elements(1);
+                if ismethod(firstElem, 'CalcThermalLoad')
+                    
+                    for e = 1:length(elements)
+                        elem = elements(e);
+                        
+                        f_ele = elem.CalcThermalLoad();
+                        
+                        lm = elem.GetLocationMatrix();
+                        
+                        for i = 1:length(lm)
+                            eq = lm(i);
+                            if eq > 0
+                                F_thermal(eq) = F_thermal(eq) + f_ele(i);
+                            end
+                        end
+                    end
+                end
+            end
+            
+            F_total = F_mech + F_thermal;
+            
+            fprintf('   Force Assembly Done. Mech Norm: %.2e, Thermal Norm: %.2e\n', norm(F_mech), norm(F_thermal));
+        end
         
         % 将计算出的全局位移向量 U_val 分发回各个节点
         function UpdateNodalDisplacements(obj, U_val)
-            fprintf('Updating Nodal Displacements...\n');
-            fprintf('   NODE          X-DISP          Y-DISP          Z-DISP\n');
+            %fprintf('Updating Nodal Displacements...\n');
+            %fprintf('   NODE          X-DISP          Y-DISP          Z-DISP\n');
             
             for i = 1:obj.NUMNP
                 node = obj.NodeList(i);
@@ -521,8 +542,8 @@ classdef Domain < handle
                 node.Displacement = dispVec;   
                 
             % 打印节点平动分量，验证结果
-            fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
-                node.ID, dispVec(1), dispVec(2), dispVec(3));
+            %fprintf(' %6d  %14.6e  %14.6e  %14.6e\n', ...
+                %node.ID, dispVec(1), dispVec(2), dispVec(3));
             end
         end
 
