@@ -14,7 +14,3 @@ slprj/
 
 # Octave (if you use it)
 octave-workspace
-
-*.plt
-
-*.out
