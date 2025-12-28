@@ -17,7 +17,6 @@ classdef BeamMaterial < Material
         Iy      % Moment of inertia about local y-axis
         Iz      % Moment of inertia about local z-axis
         J       % Torsional constant (Polar moment of inertia)
-        Density
         Alpha
     end
     
