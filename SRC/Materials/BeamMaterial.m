@@ -12,7 +12,8 @@ classdef BeamMaterial < Material
         Area    
         Iy      
         Iz      
-        J       
+        J
+        Alpha
     end
     
     methods
