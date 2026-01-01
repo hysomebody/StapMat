@@ -67,11 +67,11 @@ classdef GeneralizedAlphaSolver < Solver
             %--------------------------------------------------------
             % 定义时间函数 （输入的载荷在这里修改）
             % % 正弦载荷
-             omega = 60; 
-             time_func = @(t) sin(omega * t);
+            %omega = 60; 
+            %time_func = @(t) sin(omega * t);
 
             % 阶跃载荷
-            %time_func = @(t) 1.0;
+            time_func = @(t) 1.0;
             
 
             % 3 组合成 fhandle 
